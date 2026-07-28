@@ -347,11 +347,19 @@ EOF
     if [[ "$ethernet_mode" == "smart" ]]; then
       echo "Checking for an Ethernet DHCP uplink..."
       if as_root nmcli --wait 12 connection up "$ETHERNET_CONNECTION"; then
-        echo "Ethernet smart mode selected auto: a DHCP uplink was found."
-        exit 0
+        ethernet_gateway="$(
+          nmcli -g IP4.GATEWAY device show "$ETHERNET_INTERFACE" 2>/dev/null |
+            sed -n '/./{p;q;}' ||
+            true
+        )"
+        if [[ -n "$ethernet_gateway" && "$ethernet_gateway" != "--" ]]; then
+          echo "Ethernet smart mode selected auto: IPv4 gateway $ethernet_gateway was found."
+          exit 0
+        fi
+        echo "Ethernet activated without an IPv4 gateway; it is not an uplink."
       fi
 
-      echo "No DHCP uplink found; switching Ethernet to shared mode."
+      echo "No usable DHCP uplink found; switching Ethernet to shared mode."
       as_root nmcli connection down "$ETHERNET_CONNECTION" 2>/dev/null || true
       as_root nmcli connection modify "$ETHERNET_CONNECTION" \
         connection.interface-name "$ETHERNET_INTERFACE" \

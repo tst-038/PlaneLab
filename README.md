@@ -163,9 +163,11 @@ if both must remain active.
 
 ### Choose the Ethernet mode
 
-The recommended mode first tries to obtain a DHCP lease from an Ethernet
-router. If no lease is received within 12 seconds, PlaneLab automatically
-switches the port to shared mode:
+The recommended mode first tries to obtain a DHCP lease and IPv4 default
+gateway from an Ethernet router. Merely activating through IPv6 link-local or
+receiving an address without a gateway does not count as an uplink. If no
+usable gateway is found within 12 seconds, PlaneLab automatically switches the
+port to shared mode:
 
 ```bash
 ./hotspot.sh ethernet smart
