@@ -67,6 +67,12 @@ Configure applications with container paths, never host paths:
 - SABnzbd temporary folder: `/downloads/incomplete`
 - SABnzbd completed folder: `/downloads/complete`
 - RDTClient download and mapped paths: `/downloads`
+- Youtarr internal data path: `/usr/src/app/data`
+
+Youtarr's `YOUTUBE_OUTPUT_DIR` variable is informational and represents the
+host directory. Its actual in-container download directory is `DATA_PATH`,
+which defaults to `/usr/src/app/data`. The Compose file therefore mounts
+`${MEDIA_ROOT}/YouTube` at `/usr/src/app/data`.
 
 Containers address one another by Compose service name:
 

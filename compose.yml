@@ -140,10 +140,14 @@ services:
       DB_NAME: youtarr
       DB_USER: youtarr
       DB_PASSWORD: ${YOUTARR_DB_PASSWORD:?Set YOUTARR_DB_PASSWORD in .env}
-      YOUTUBE_OUTPUT_DIR: /downloads
+      # Informational host path; Youtarr downloads internally to DATA_PATH.
+      YOUTUBE_OUTPUT_DIR: ${MEDIA_ROOT:?Set MEDIA_ROOT in .env}/YouTube
+      DATA_PATH: /usr/src/app/data
     volumes:
       - youtarr_config:/app/config
-      - ${MEDIA_ROOT:?Set MEDIA_ROOT in .env}/YouTube:/downloads
+      - youtarr_images:/app/server/images
+      - youtarr_jobs:/app/jobs
+      - ${MEDIA_ROOT:?Set MEDIA_ROOT in .env}/YouTube:/usr/src/app/data
 
 volumes:
   jellyfin_config:
@@ -175,4 +179,10 @@ volumes:
     external: true
   youtarr_config:
     name: planelab_youtarr_config
+    external: true
+  youtarr_images:
+    name: planelab_youtarr_images
+    external: true
+  youtarr_jobs:
+    name: planelab_youtarr_jobs
     external: true

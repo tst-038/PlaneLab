@@ -24,6 +24,8 @@ VOLUMES=(
   planelab_rdtclient_data
   planelab_youtarr_database
   planelab_youtarr_config
+  planelab_youtarr_images
+  planelab_youtarr_jobs
 )
 
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"

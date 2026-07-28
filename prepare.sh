@@ -12,6 +12,8 @@ VOLUMES=(
   planelab_rdtclient_data
   planelab_youtarr_database
   planelab_youtarr_config
+  planelab_youtarr_images
+  planelab_youtarr_jobs
 )
 
 for volume_name in "${VOLUMES[@]}"; do
