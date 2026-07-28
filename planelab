@@ -294,6 +294,7 @@ network_menu() {
       "Start PlaneLab hotspot" \
       "Stop PlaneLab hotspot" \
       "Connect temporary Wi-Fi" \
+      "Ethernet smart detect (recommended)" \
       "Ethernet receives network (auto)" \
       "Ethernet provides network (shared)" \
       "Network status"
@@ -309,9 +310,10 @@ network_menu() {
         unset password
         pause
         ;;
-      4) ./hotspot.sh ethernet auto; pause ;;
-      5) ./hotspot.sh ethernet shared; pause ;;
-      6) ./hotspot.sh status; pause ;;
+      4) ./hotspot.sh ethernet smart; pause ;;
+      5) ./hotspot.sh ethernet auto; pause ;;
+      6) ./hotspot.sh ethernet shared; pause ;;
+      7) ./hotspot.sh status; pause ;;
       -1) return ;;
     esac
   done

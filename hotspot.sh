@@ -13,7 +13,7 @@ Usage:
   ./hotspot.sh uplink <ssid> [password]
                                   Stop hotspot and connect to temporary Wi-Fi
   ./hotspot.sh uplink-down        Disconnect the configured uplink
-  ./hotspot.sh ethernet <auto|shared>
+  ./hotspot.sh ethernet <smart|auto|shared>
                                   Configure and activate Ethernet mode
   ./hotspot.sh status             Show hotspot and Wi-Fi status
   ./hotspot.sh remove             Remove the NetworkManager profile
@@ -252,9 +252,11 @@ EOF
   ethernet)
     ethernet_mode="${1:-}"
     if [[ "$#" -ne 1 || (
-      "$ethernet_mode" != "auto" && "$ethernet_mode" != "shared"
+      "$ethernet_mode" != "smart" &&
+      "$ethernet_mode" != "auto" &&
+      "$ethernet_mode" != "shared"
     ) ]]; then
-      echo "Usage: ./hotspot.sh ethernet <auto|shared>" >&2
+      echo "Usage: ./hotspot.sh ethernet <smart|auto|shared>" >&2
       exit 2
     fi
     if ! nmcli -t -f DEVICE,TYPE device status |
@@ -271,7 +273,7 @@ EOF
         con-name "$ETHERNET_CONNECTION"
     fi
 
-    if [[ "$ethernet_mode" == "auto" ]]; then
+    if [[ "$ethernet_mode" == "auto" || "$ethernet_mode" == "smart" ]]; then
       as_root nmcli connection modify "$ETHERNET_CONNECTION" \
         connection.interface-name "$ETHERNET_INTERFACE" \
         connection.autoconnect yes \
@@ -287,10 +289,27 @@ EOF
         ipv6.method disabled
     fi
 
-    as_root nmcli connection up "$ETHERNET_CONNECTION"
-    if [[ "$ethernet_mode" == "auto" ]]; then
+    if [[ "$ethernet_mode" == "smart" ]]; then
+      echo "Checking for an Ethernet DHCP uplink..."
+      if as_root nmcli --wait 12 connection up "$ETHERNET_CONNECTION"; then
+        echo "Ethernet smart mode selected auto: a DHCP uplink was found."
+        exit 0
+      fi
+
+      echo "No DHCP uplink found; switching Ethernet to shared mode."
+      as_root nmcli connection modify "$ETHERNET_CONNECTION" \
+        connection.interface-name "$ETHERNET_INTERFACE" \
+        connection.autoconnect yes \
+        ipv4.method shared \
+        ipv4.addresses "$ETHERNET_SHARED_ADDRESS" \
+        ipv6.method disabled
+      as_root nmcli connection up "$ETHERNET_CONNECTION"
+      echo "Ethernet smart mode selected shared at ${ETHERNET_SHARED_ADDRESS%/*}."
+    elif [[ "$ethernet_mode" == "auto" ]]; then
+      as_root nmcli connection up "$ETHERNET_CONNECTION"
       echo "Ethernet mode: auto (receives its address from a router)."
     else
+      as_root nmcli connection up "$ETHERNET_CONNECTION"
       echo "Ethernet mode: shared (PlaneLab supplies DHCP at ${ETHERNET_SHARED_ADDRESS%/*})."
     fi
     ;;

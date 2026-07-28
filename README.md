@@ -122,6 +122,7 @@ Useful commands:
 ./hotspot.sh status
 ./hotspot.sh down
 ./hotspot.sh up
+./hotspot.sh ethernet smart
 ./hotspot.sh ethernet auto
 ./hotspot.sh ethernet shared
 ./hotspot.sh remove
@@ -160,6 +161,14 @@ another Wi-Fi network simultaneously. Use Ethernet or a second Wi-Fi adapter
 if both must remain active.
 
 ### Choose the Ethernet mode
+
+The recommended mode first tries to obtain a DHCP lease from an Ethernet
+router. If no lease is received within 12 seconds, PlaneLab automatically
+switches the port to shared mode:
+
+```bash
+./hotspot.sh ethernet smart
+```
 
 Use `auto` when the Pi is connected to a router and should receive an address
 and internet connection through DHCP:
