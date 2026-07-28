@@ -80,12 +80,18 @@ SSID: PlaneLab
 Pi address: 10.42.0.1
 Band: 5 GHz, channel 36
 SSID broadcast: hidden
+Security: WPA2/WPA3 Personal transition mode, AES/CCMP, WPS disabled
 ```
 
 NetworkManager's shared IPv4 mode supplies DHCP and DNS to passengers and
 shares an Ethernet/second-adapter uplink when one exists. No uplink is required
 to use Jellyfin offline. Client isolation, hidden SSID, and connection autostart
 are enabled. Passengers must manually enter the exact SSID and password.
+
+NetworkManager calls WPA2/WPA3 Personal transition mode `wpa-psk`. Recent
+clients can negotiate WPA3 while older clients retain WPA2 compatibility.
+WPA3-only (`sae`) is deliberately not the default because Raspberry Pi AP
+drivers and older passenger devices can fail to connect to it.
 
 Useful commands:
 

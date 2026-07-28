@@ -146,6 +146,7 @@ EOF
         ssid "$HOTSPOT_SSID"
     fi
 
+    # NetworkManager defines wpa-psk as WPA2 + WPA3 Personal transition mode.
     as_root nmcli connection modify "$HOTSPOT_CONNECTION" \
       connection.interface-name "$HOTSPOT_INTERFACE" \
       connection.autoconnect yes \
@@ -157,6 +158,11 @@ EOF
       802-11-wireless.hidden "$HOTSPOT_HIDDEN" \
       802-11-wireless.ap-isolation yes \
       802-11-wireless-security.key-mgmt wpa-psk \
+      802-11-wireless-security.proto rsn \
+      802-11-wireless-security.pairwise ccmp \
+      802-11-wireless-security.group ccmp \
+      802-11-wireless-security.pmf optional \
+      802-11-wireless-security.wps-method disabled \
       802-11-wireless-security.psk "$HOTSPOT_PASSWORD" \
       ipv4.method shared \
       ipv4.addresses "$HOTSPOT_ADDRESS" \
@@ -190,7 +196,7 @@ EOF
     echo
     if connection_exists; then
       nmcli --show-secrets connection show "$HOTSPOT_CONNECTION" |
-      grep -E '^(connection.id|connection.interface-name|connection.autoconnect|802-11-wireless.ssid|802-11-wireless.mode|802-11-wireless.band|802-11-wireless.channel|802-11-wireless.hidden|ipv4.method|ipv4.addresses)'
+      grep -E '^(connection.id|connection.interface-name|connection.autoconnect|802-11-wireless.ssid|802-11-wireless.mode|802-11-wireless.band|802-11-wireless.channel|802-11-wireless.hidden|802-11-wireless-security.key-mgmt|802-11-wireless-security.proto|802-11-wireless-security.pairwise|802-11-wireless-security.group|802-11-wireless-security.pmf|802-11-wireless-security.wps-method|ipv4.method|ipv4.addresses)'
       show_urls
     else
       echo "Hotspot profile '$HOTSPOT_CONNECTION' is not installed."
