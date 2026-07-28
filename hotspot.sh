@@ -36,6 +36,7 @@ source "$CONFIG_FILE"
 : "${HOTSPOT_ADDRESS:=10.42.0.1/24}"
 : "${HOTSPOT_BAND:=a}"
 : "${HOTSPOT_CHANNEL:=36}"
+: "${HOTSPOT_HIDDEN:=yes}"
 : "${WIFI_COUNTRY:=BE}"
 : "${PLANELAB_HOSTNAME:=planelab}"
 
@@ -153,6 +154,7 @@ EOF
       802-11-wireless.ssid "$HOTSPOT_SSID" \
       802-11-wireless.band "$HOTSPOT_BAND" \
       802-11-wireless.channel "$HOTSPOT_CHANNEL" \
+      802-11-wireless.hidden "$HOTSPOT_HIDDEN" \
       802-11-wireless.ap-isolation yes \
       802-11-wireless-security.key-mgmt wpa-psk \
       802-11-wireless-security.psk "$HOTSPOT_PASSWORD" \
@@ -188,7 +190,7 @@ EOF
     echo
     if connection_exists; then
       nmcli --show-secrets connection show "$HOTSPOT_CONNECTION" |
-      grep -E '^(connection.id|connection.interface-name|connection.autoconnect|802-11-wireless.ssid|802-11-wireless.mode|802-11-wireless.band|802-11-wireless.channel|ipv4.method|ipv4.addresses)'
+      grep -E '^(connection.id|connection.interface-name|connection.autoconnect|802-11-wireless.ssid|802-11-wireless.mode|802-11-wireless.band|802-11-wireless.channel|802-11-wireless.hidden|ipv4.method|ipv4.addresses)'
       show_urls
     else
       echo "Hotspot profile '$HOTSPOT_CONNECTION' is not installed."
