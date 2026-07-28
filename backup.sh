@@ -62,7 +62,7 @@ for volume_name in "${VOLUMES[@]}"; do
     tar -czf "/backup/$volume_name.tar.gz" -C /source .
 done
 
-cp compose.yml "$BACKUP_DIR/compose.yml"
+cp compose.yml traefik.yml traefik-dynamic.yml "$BACKUP_DIR/"
 if [[ -f .env ]]; then
   cp .env "$BACKUP_DIR/.env"
   chmod 600 "$BACKUP_DIR/.env"

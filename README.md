@@ -30,14 +30,18 @@ point also works without the menu:
 
 | Service | URL | Purpose |
 |---|---:|---|
-| Jellyfin | `:8096` | Offline playback |
-| Seerr | `:5055` | Requests |
-| Sonarr | `:8989` | TV management |
-| Radarr | `:7878` | Movie management |
-| Prowlarr | `:9696` | Indexer management |
-| SABnzbd | `:8080` | TorBox News/Usenet client |
-| RDTClient | `:6500` | TorBox torrent adapter |
-| Youtarr | `:3087` | YouTube library provisioning |
+| Jellyfin | `http://jellyfin.planelab` | Offline playback |
+| Seerr | `http://seerr.planelab` | Requests |
+| Sonarr | `http://sonarr.planelab` | TV management |
+| Radarr | `http://radarr.planelab` | Movie management |
+| Prowlarr | `http://prowlarr.planelab` | Indexer management |
+| SABnzbd | `http://sabnzbd.planelab` | TorBox News/Usenet client |
+| RDTClient | `http://rdtclient.planelab` | TorBox torrent adapter |
+| Youtarr | `http://youtarr.planelab` | YouTube library provisioning |
+
+Traefik listens on port 80 and routes each local hostname to its service.
+NetworkManager's shared DNS advertises the names to hotspot and shared-Ethernet
+clients. The original IP-and-port URLs remain available for troubleshooting.
 
 ## First start on macOS
 
@@ -130,7 +134,22 @@ Useful commands:
 
 The connection profile autostarts after reboot. PlaneLab is always reached
 directly through the fixed address `10.42.0.1`. Installing the hotspot also
-enables automatic Ethernet smart detection as a systemd service.
+enables automatic Ethernet smart detection as a systemd service and installs
+the local `.planelab` DNS records.
+
+After `./hotspot.sh install` and `docker compose up -d`, clients using PlaneLab
+DHCP can open services without remembering IP addresses or ports:
+
+```text
+http://jellyfin.planelab
+http://seerr.planelab
+http://youtarr.planelab
+```
+
+Clients connected through an unrelated router in Ethernet `auto` mode use that
+router's DNS and may not know the private names. In that case use the Pi's
+assigned address and original service port. Private/secure DNS settings on some
+phones can also bypass the DNS server supplied by PlaneLab.
 
 ### Temporarily connect to uplink Wi-Fi
 
@@ -263,7 +282,7 @@ It never touches media or download directories.
 
 ```bash
 git init
-git add compose.yml .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh hotspot.sh ethernet-watch.sh planelab README.md
+git add compose.yml traefik.yml traefik-dynamic.yml .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh hotspot.sh ethernet-watch.sh planelab README.md
 git commit -m "Initial PlaneLab stack"
 ```
 

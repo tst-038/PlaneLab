@@ -51,6 +51,8 @@ source "$CONFIG_FILE"
 : "${ETHERNET_SHARED_ADDRESS:=10.42.1.1/24}"
 : "${ETHERNET_SMART_WATCH:=yes}"
 : "${ETHERNET_WATCH_SERVICE:=planelab-ethernet-watch.service}"
+: "${LOCAL_DNS_CONFIG:=/etc/NetworkManager/dnsmasq-shared.d/90-planelab.conf}"
+: "${LOCAL_DNS_HOSTS:=/etc/NetworkManager/planelab.hosts}"
 
 if [[ "${#HOTSPOT_PASSWORD}" -lt 8 || "${#HOTSPOT_PASSWORD}" -gt 63 ]]; then
   echo "Error: HOTSPOT_PASSWORD must contain 8-63 characters." >&2
@@ -81,16 +83,43 @@ connection_exists() {
 }
 
 show_urls() {
-  local hotspot_ip="${HOTSPOT_ADDRESS%/*}"
   cat <<EOF
 
 Connect to Wi-Fi: $HOTSPOT_SSID
 
 PlaneLab:
-  Jellyfin  http://$hotspot_ip:8096
-  Seerr     http://$hotspot_ip:5055
-  Youtarr   http://$hotspot_ip:3087
+  Jellyfin  http://jellyfin.planelab
+  Seerr     http://seerr.planelab
+  Youtarr   http://youtarr.planelab
 EOF
+}
+
+install_local_dns() {
+  local config_file hosts_file aliases
+  aliases="jellyfin.planelab seerr.planelab sonarr.planelab radarr.planelab prowlarr.planelab sabnzbd.planelab rdtclient.planelab youtarr.planelab"
+  config_file="$(mktemp)"
+  hosts_file="$(mktemp)"
+
+  {
+    printf 'localise-queries\n'
+    printf 'addn-hosts=%s\n' "$LOCAL_DNS_HOSTS"
+    printf 'dhcp-option=option:domain-search,planelab\n'
+  } > "$config_file"
+  {
+    printf '%s %s\n' "${HOTSPOT_ADDRESS%/*}" "$aliases"
+    printf '%s %s\n' "${ETHERNET_SHARED_ADDRESS%/*}" "$aliases"
+  } > "$hosts_file"
+
+  as_root install -d -o root -g root -m 0755 \
+    "$(dirname -- "$LOCAL_DNS_CONFIG")"
+  as_root install -o root -g root -m 0644 "$config_file" "$LOCAL_DNS_CONFIG"
+  as_root install -o root -g root -m 0644 "$hosts_file" "$LOCAL_DNS_HOSTS"
+  rm -f "$config_file" "$hosts_file"
+  echo "Local .planelab DNS names are installed."
+}
+
+remove_local_dns() {
+  as_root rm -f "$LOCAL_DNS_CONFIG" "$LOCAL_DNS_HOSTS"
 }
 
 install_ethernet_watch() {
@@ -230,6 +259,7 @@ EOF
       ipv4.addresses "$HOTSPOT_ADDRESS" \
       ipv6.method disabled
 
+    install_local_dns
     as_root nmcli connection up "$HOTSPOT_CONNECTION"
     install_ethernet_watch
     show_urls
@@ -412,6 +442,7 @@ EOF
 
   remove)
     remove_ethernet_watch
+    remove_local_dns
     if connection_exists; then
       as_root nmcli connection delete "$HOTSPOT_CONNECTION"
       echo "Removed hotspot profile: $HOTSPOT_CONNECTION"

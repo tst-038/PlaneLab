@@ -1,6 +1,16 @@
 name: planelab
 
 services:
+  traefik:
+    image: traefik:v3
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik-dynamic.yml:/etc/traefik/dynamic.yml:ro
+
   jellyfin:
     image: jellyfin/jellyfin:latest
     container_name: jellyfin

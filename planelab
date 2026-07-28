@@ -340,14 +340,15 @@ main_menu() {
       4) network_menu ;;
       5)
         title
-        printf '  Jellyfin  http://10.42.0.1:8096\n'
-        printf '  Seerr     http://10.42.0.1:5055\n'
-        printf '  Youtarr   http://10.42.0.1:3087\n'
-        printf '  Sonarr    http://10.42.0.1:8989\n'
-        printf '  Radarr    http://10.42.0.1:7878\n'
-        printf '  Prowlarr  http://10.42.0.1:9696\n'
-        printf '  SABnzbd   http://10.42.0.1:8080\n'
-        printf '  RDTClient http://10.42.0.1:6500\n'
+        printf '  Jellyfin  http://jellyfin.planelab\n'
+        printf '  Seerr     http://seerr.planelab\n'
+        printf '  Youtarr   http://youtarr.planelab\n'
+        printf '  Sonarr    http://sonarr.planelab\n'
+        printf '  Radarr    http://radarr.planelab\n'
+        printf '  Prowlarr  http://prowlarr.planelab\n'
+        printf '  SABnzbd   http://sabnzbd.planelab\n'
+        printf '  RDTClient http://rdtclient.planelab\n'
+        printf '\n  Direct IP and port addresses remain available as fallback.\n'
         pause
         ;;
       6|-1) title; printf '  Safe travels. ✈\n\n'; return ;;
