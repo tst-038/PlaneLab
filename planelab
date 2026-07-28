@@ -1,0 +1,329 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if [[ -t 1 ]]; then
+  RESET=$'\033[0m'
+  BOLD=$'\033[1m'
+  DIM=$'\033[2m'
+  CYAN=$'\033[36m'
+  GREEN=$'\033[32m'
+  YELLOW=$'\033[33m'
+  RED=$'\033[31m'
+else
+  RESET="" BOLD="" DIM="" CYAN="" GREEN="" YELLOW="" RED=""
+fi
+
+title() {
+  clear 2>/dev/null || true
+  printf '%s\n' "${CYAN}${BOLD}"
+  printf '  ╭──────────────────────────────────────────╮\n'
+  printf '  │              ✈  PLANELAB                 │\n'
+  printf '  │       offline media control center       │\n'
+  printf '  ╰──────────────────────────────────────────╯\n'
+  printf '%s\n' "${RESET}"
+}
+
+pause() {
+  printf '\n%s' "${DIM}Press Enter to continue…${RESET}"
+  read -r _
+}
+
+confirm() {
+  local answer
+  printf '%s [y/N] ' "$1"
+  read -r answer
+  [[ "$answer" == "y" || "$answer" == "Y" ]]
+}
+
+require_docker() {
+  if ! command -v docker >/dev/null 2>&1 ||
+    ! docker compose version >/dev/null 2>&1; then
+    printf '%s\n' "${RED}Docker Engine with Compose is required.${RESET}" >&2
+    return 1
+  fi
+}
+
+require_config() {
+  if [[ ! -f .env ]]; then
+    printf '%s\n' "${RED}.env is missing. Run Setup first.${RESET}" >&2
+    return 1
+  fi
+}
+
+stack_state() {
+  if ! command -v docker >/dev/null 2>&1; then
+    printf '%s' "${RED}Docker missing${RESET}"
+  elif [[ ! -f .env ]]; then
+    printf '%s' "${YELLOW}not configured${RESET}"
+  elif docker compose ps --status running --quiet 2>/dev/null | grep -q .; then
+    printf '%s' "${GREEN}running${RESET}"
+  else
+    printf '%s' "${YELLOW}stopped${RESET}"
+  fi
+}
+
+hotspot_state() {
+  if ! command -v nmcli >/dev/null 2>&1; then
+    printf '%s' "${DIM}not available${RESET}"
+  elif nmcli -t -f NAME connection show --active 2>/dev/null |
+    grep -Fxq "planelab-hotspot"; then
+    printf '%s' "${GREEN}active${RESET}"
+  else
+    printf '%s' "${YELLOW}inactive${RESET}"
+  fi
+}
+
+random_secret() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 24
+  else
+    od -An -N24 -tx1 /dev/urandom | tr -d ' \n'
+  fi
+}
+
+setup_stack() {
+  local media_default downloads_default media_root download_root
+  require_docker || return
+
+  if [[ -f .env ]] && ! confirm ".env already exists. Replace it?"; then
+    printf 'Keeping existing .env.\n'
+  else
+    if [[ "$(uname -s)" == "Linux" ]]; then
+      media_default="/mnt/nvme/media"
+      downloads_default="/mnt/nvme/downloads"
+    else
+      media_default="./data/media"
+      downloads_default="./data/downloads"
+    fi
+
+    read -r -p "Media path [$media_default]: " media_root
+    read -r -p "Downloads path [$downloads_default]: " download_root
+    media_root="${media_root:-$media_default}"
+    download_root="${download_root:-$downloads_default}"
+
+    if [[ "$media_root" == *$'\n'* || "$download_root" == *$'\n'* ]]; then
+      printf '%s\n' "${RED}Paths may not contain newlines.${RESET}" >&2
+      return 1
+    fi
+
+    {
+      printf 'TZ=Europe/Brussels\n'
+      printf 'PUID=%s\n' "$(id -u)"
+      printf 'PGID=%s\n\n' "$(id -g)"
+      printf 'MEDIA_ROOT=%s\n' "$media_root"
+      printf 'DOWNLOAD_ROOT=%s\n\n' "$download_root"
+      printf 'MARIADB_ROOT_PASSWORD=%s\n' "$(random_secret)"
+      printf 'YOUTARR_DB_PASSWORD=%s\n' "$(random_secret)"
+    } > .env
+    chmod 600 .env
+    printf '%s\n' "${GREEN}Created private .env with random database passwords.${RESET}"
+  fi
+
+  # Compose creates relative development paths itself. Pi storage is prepared
+  # explicitly and only when its parent filesystem is actually mounted.
+  if [[ "$(uname -s)" == "Linux" ]]; then
+    media_root="$(sed -n 's/^MEDIA_ROOT=//p' .env | tail -n 1)"
+    download_root="$(sed -n 's/^DOWNLOAD_ROOT=//p' .env | tail -n 1)"
+    if [[ "$media_root" == /mnt/nvme/* || "$download_root" == /mnt/nvme/* ]]; then
+      if ! mountpoint -q /mnt/nvme; then
+        printf '%s\n' "${RED}/mnt/nvme is not mounted; refusing to start.${RESET}" >&2
+        return 1
+      fi
+      sudo mkdir -p \
+        "$media_root/movies" "$media_root/shows" "$media_root/YouTube" \
+        "$download_root/incomplete" \
+        "$download_root/complete/radarr" "$download_root/complete/sonarr"
+      sudo chown -R "$(id -u):$(id -g)" "$media_root" "$download_root"
+    fi
+  else
+    mkdir -p data/media/{movies,shows,YouTube}
+    mkdir -p data/downloads/{incomplete,complete/{radarr,sonarr}}
+  fi
+
+  ./prepare.sh
+  docker compose config --quiet
+  docker compose pull
+  docker compose up -d
+  docker compose ps
+}
+
+show_services() {
+  require_docker && require_config || return
+  docker compose ps
+}
+
+service_menu() {
+  local choice
+  while true; do
+    title
+    printf '  %sSERVICES%s\n\n' "$BOLD" "$RESET"
+    printf '  [1] Start stack\n'
+    printf '  [2] Stop stack\n'
+    printf '  [3] Restart stack\n'
+    printf '  [4] Update images and restart\n'
+    printf '  [5] Show status\n'
+    printf '  [6] Follow logs\n'
+    printf '  [b] Back\n\n'
+    read -r -p "  › " choice
+    case "$choice" in
+      1) require_docker && require_config && ./prepare.sh && docker compose up -d; pause ;;
+      2) require_docker && require_config && docker compose stop; pause ;;
+      3) require_docker && require_config && docker compose restart; pause ;;
+      4)
+        require_docker && require_config &&
+          docker compose pull &&
+          docker compose up -d --remove-orphans
+        pause
+        ;;
+      5) show_services; pause ;;
+      6)
+        require_docker && require_config &&
+          docker compose logs --tail=100 --follow
+        ;;
+      b|B) return ;;
+    esac
+  done
+}
+
+restore_menu() {
+  local backups choice selected replace_flag backup_path
+  backups=()
+  while IFS= read -r backup_path; do
+    backups+=("$backup_path")
+  done < <(
+    find "$SCRIPT_DIR/backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null |
+      sort -r
+  )
+  if [[ "${#backups[@]}" -eq 0 ]]; then
+    printf '%s\n' "${YELLOW}No backups found in $SCRIPT_DIR/backups.${RESET}"
+    return
+  fi
+
+  printf '%s\n\n' "${BOLD}Available backups:${RESET}"
+  for index in "${!backups[@]}"; do
+    printf '  [%d] %s\n' "$((index + 1))" "$(basename -- "${backups[$index]}")"
+  done
+  printf '\n'
+  read -r -p "Choose a backup, or b to cancel: " choice
+  [[ "$choice" == "b" || "$choice" == "B" ]] && return
+  [[ "$choice" =~ ^[0-9]+$ ]] || return 1
+  ((choice >= 1 && choice <= ${#backups[@]})) || return 1
+  selected="${backups[$((choice - 1))]}"
+
+  replace_flag=""
+  if confirm "Replace existing application volumes?"; then
+    printf '%s\n' "${RED}This overwrites current app configuration.${RESET}"
+    confirm "Continue with destructive restore?" || return
+    replace_flag="--replace"
+  fi
+  ./restore.sh ${replace_flag:+"$replace_flag"} "$selected"
+}
+
+network_menu() {
+  local choice ssid password
+  while true; do
+    title
+    printf '  %sNETWORK%s\n\n' "$BOLD" "$RESET"
+    printf '  [1] Install/update PlaneLab hotspot\n'
+    printf '  [2] Start PlaneLab hotspot\n'
+    printf '  [3] Stop PlaneLab hotspot\n'
+    printf '  [4] Connect temporary Wi-Fi\n'
+    printf '  [5] Ethernet receives network (auto)\n'
+    printf '  [6] Ethernet provides network (shared)\n'
+    printf '  [7] Network status\n'
+    printf '  [b] Back\n\n'
+    read -r -p "  › " choice
+    case "$choice" in
+      1) ./hotspot.sh install; pause ;;
+      2) ./hotspot.sh up; pause ;;
+      3) ./hotspot.sh down; pause ;;
+      4)
+        read -r -p "Wi-Fi name: " ssid
+        read -r -s -p "Password: " password
+        printf '\n'
+        ./hotspot.sh uplink "$ssid" "$password"
+        unset password
+        pause
+        ;;
+      5) ./hotspot.sh ethernet auto; pause ;;
+      6) ./hotspot.sh ethernet shared; pause ;;
+      7) ./hotspot.sh status; pause ;;
+      b|B) return ;;
+    esac
+  done
+}
+
+main_menu() {
+  local choice
+  while true; do
+    title
+    printf '  Stack:   %s\n' "$(stack_state)"
+    printf '  Hotspot: %s\n\n' "$(hotspot_state)"
+    printf '  [1] First setup / reconfigure\n'
+    printf '  [2] Services\n'
+    printf '  [3] Create backup\n'
+    printf '  [4] Restore backup\n'
+    printf '  [5] Network\n'
+    printf '  [6] Open service addresses\n'
+    printf '  [q] Quit\n\n'
+    read -r -p "  › " choice
+    case "$choice" in
+      1) title; setup_stack; pause ;;
+      2) service_menu ;;
+      3) title; ./backup.sh; pause ;;
+      4) title; restore_menu; pause ;;
+      5) network_menu ;;
+      6)
+        title
+        printf '  Jellyfin  http://10.42.0.1:8096\n'
+        printf '  Seerr     http://10.42.0.1:5055\n'
+        printf '  Youtarr   http://10.42.0.1:3087\n'
+        printf '  Sonarr    http://10.42.0.1:8989\n'
+        printf '  Radarr    http://10.42.0.1:7878\n'
+        printf '  Prowlarr  http://10.42.0.1:9696\n'
+        printf '  SABnzbd   http://10.42.0.1:8080\n'
+        pause
+        ;;
+      q|Q) title; printf '  Safe travels. ✈\n\n'; return ;;
+    esac
+  done
+}
+
+case "${1:-tui}" in
+  tui) main_menu ;;
+  setup) setup_stack ;;
+  start) require_docker && require_config && ./prepare.sh && docker compose up -d ;;
+  stop) require_docker && require_config && docker compose stop ;;
+  restart) require_docker && require_config && docker compose restart ;;
+  update)
+    require_docker && require_config &&
+      docker compose pull &&
+      docker compose up -d --remove-orphans
+    ;;
+  status) show_services ;;
+  logs) require_docker && require_config && docker compose logs --tail=100 --follow ;;
+  backup) ./backup.sh ;;
+  restore) shift; ./restore.sh "$@" ;;
+  network) shift; ./hotspot.sh "$@" ;;
+  help|-h|--help)
+    cat <<'EOF'
+Usage: ./planelab [command]
+
+Commands:
+  tui (default)    Open the interactive control center
+  setup            Configure and start PlaneLab
+  start|stop|restart|update|status|logs
+  backup
+  restore [--replace] <backup-directory>
+  network <hotspot-command>
+EOF
+    ;;
+  *)
+    printf 'Unknown command: %s\n\n' "$1" >&2
+    "$0" --help >&2
+    exit 2
+    ;;
+esac

@@ -3,6 +3,26 @@
 Offline-first Jellyfin provisioning stack for a Raspberry Pi or a macOS test
 machine. Use it only with media and sources you are authorized to access.
 
+## PlaneLab control center
+
+The easiest way to manage the appliance is the dependency-free terminal UI:
+
+```bash
+./planelab
+```
+
+It provides first-time setup, service control and updates, backup/restore,
+hotspot and temporary uplink management, Ethernet modes, logs, status, and all
+local service addresses. The same entry point also works without the menu:
+
+```bash
+./planelab setup
+./planelab backup
+./planelab update
+./planelab network uplink "WorkshopWiFi"
+./planelab network ethernet shared
+```
+
 ## Services
 
 | Service | URL | Purpose |
@@ -220,7 +240,7 @@ It never touches media or download directories.
 
 ```bash
 git init
-git add compose.yml .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh hotspot.sh README.md
+git add compose.yml .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh hotspot.sh planelab README.md
 git commit -m "Initial PlaneLab stack"
 ```
 
