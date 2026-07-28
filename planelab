@@ -38,6 +38,64 @@ confirm() {
   [[ "$answer" == "y" || "$answer" == "Y" ]]
 }
 
+arrow_menu() {
+  local options count selected key sequence index answer
+  options=("$@")
+  count="${#options[@]}"
+  selected=0
+
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    for index in "${!options[@]}"; do
+      printf '  [%d] %s\n' "$((index + 1))" "${options[$index]}"
+    done
+    read -r -p "  › " answer
+    if [[ "$answer" == "q" || "$answer" == "Q" ]]; then
+      MENU_CHOICE=$((count - 1))
+    elif [[ "$answer" =~ ^[0-9]+$ ]] &&
+      ((answer >= 1 && answer <= count)); then
+      MENU_CHOICE=$((answer - 1))
+    else
+      MENU_CHOICE=$((count - 1))
+    fi
+    return
+  fi
+
+  printf '  %sUse ↑/↓ or j/k, then Enter%s\n\n' "$DIM" "$RESET"
+  while true; do
+    for index in "${!options[@]}"; do
+      if [[ "$index" -eq "$selected" ]]; then
+        printf '\033[2K  %s❯ %-42s%s\n' "$CYAN$BOLD" "${options[$index]}" "$RESET"
+      else
+        printf '\033[2K    %-42s\n' "${options[$index]}"
+      fi
+    done
+
+    read -r -s -n 1 key
+    case "$key" in
+      $'\033')
+        sequence=""
+        read -r -s -n 2 sequence || true
+        case "$sequence" in
+          '[A') selected=$(((selected - 1 + count) % count)) ;;
+          '[B') selected=$(((selected + 1) % count)) ;;
+        esac
+        ;;
+      k|K) selected=$(((selected - 1 + count) % count)) ;;
+      j|J) selected=$(((selected + 1) % count)) ;;
+      q|Q) selected=$((count - 1)); MENU_CHOICE="$selected"; printf '\n'; return ;;
+      '') MENU_CHOICE="$selected"; printf '\n'; return ;;
+      [1-9])
+        if ((key <= count)); then
+          MENU_CHOICE=$((key - 1))
+          printf '\n'
+          return
+        fi
+        ;;
+    esac
+    printf '\033[%dA' "$count"
+  done
+}
+
 require_docker() {
   if ! command -v docker >/dev/null 2>&1 ||
     ! docker compose version >/dev/null 2>&1; then
@@ -156,43 +214,44 @@ show_services() {
 }
 
 service_menu() {
-  local choice
   while true; do
     title
     printf '  %sSERVICES%s\n\n' "$BOLD" "$RESET"
-    printf '  [1] Start stack\n'
-    printf '  [2] Stop stack\n'
-    printf '  [3] Restart stack\n'
-    printf '  [4] Update images and restart\n'
-    printf '  [5] Show status\n'
-    printf '  [6] Follow logs\n'
-    printf '  [b] Back\n\n'
-    read -r -p "  › " choice
-    case "$choice" in
-      1) require_docker && require_config && ./prepare.sh && docker compose up -d; pause ;;
-      2) require_docker && require_config && docker compose stop; pause ;;
-      3) require_docker && require_config && docker compose restart; pause ;;
-      4)
+    arrow_menu \
+      "Start stack" \
+      "Stop stack" \
+      "Restart stack" \
+      "Update images and restart" \
+      "Show status" \
+      "Follow logs" \
+      "Back"
+    case "$MENU_CHOICE" in
+      0) require_docker && require_config && ./prepare.sh && docker compose up -d; pause ;;
+      1) require_docker && require_config && docker compose stop; pause ;;
+      2) require_docker && require_config && docker compose restart; pause ;;
+      3)
         require_docker && require_config &&
           docker compose pull &&
           docker compose up -d --remove-orphans
         pause
         ;;
-      5) show_services; pause ;;
-      6)
+      4) show_services; pause ;;
+      5)
         require_docker && require_config &&
           docker compose logs --tail=100 --follow
         ;;
-      b|B) return ;;
+      6) return ;;
     esac
   done
 }
 
 restore_menu() {
-  local backups choice selected replace_flag backup_path
+  local backups labels selected replace_flag backup_path index
   backups=()
+  labels=()
   while IFS= read -r backup_path; do
     backups+=("$backup_path")
+    labels+=("$(basename -- "$backup_path")")
   done < <(
     find "$SCRIPT_DIR/backups" -mindepth 1 -maxdepth 1 -type d 2>/dev/null |
       sort -r
@@ -202,16 +261,12 @@ restore_menu() {
     return
   fi
 
-  printf '%s\n\n' "${BOLD}Available backups:${RESET}"
-  for index in "${!backups[@]}"; do
-    printf '  [%d] %s\n' "$((index + 1))" "$(basename -- "${backups[$index]}")"
-  done
-  printf '\n'
-  read -r -p "Choose a backup, or b to cancel: " choice
-  [[ "$choice" == "b" || "$choice" == "B" ]] && return
-  [[ "$choice" =~ ^[0-9]+$ ]] || return 1
-  ((choice >= 1 && choice <= ${#backups[@]})) || return 1
-  selected="${backups[$((choice - 1))]}"
+  printf '%s\n\n' "${BOLD}AVAILABLE BACKUPS${RESET}"
+  labels+=("Cancel")
+  arrow_menu "${labels[@]}"
+  index="$MENU_CHOICE"
+  ((index < ${#backups[@]})) || return
+  selected="${backups[$index]}"
 
   replace_flag=""
   if confirm "Replace existing application volumes?"; then
@@ -223,24 +278,24 @@ restore_menu() {
 }
 
 network_menu() {
-  local choice ssid password
+  local ssid password
   while true; do
     title
     printf '  %sNETWORK%s\n\n' "$BOLD" "$RESET"
-    printf '  [1] Install/update PlaneLab hotspot\n'
-    printf '  [2] Start PlaneLab hotspot\n'
-    printf '  [3] Stop PlaneLab hotspot\n'
-    printf '  [4] Connect temporary Wi-Fi\n'
-    printf '  [5] Ethernet receives network (auto)\n'
-    printf '  [6] Ethernet provides network (shared)\n'
-    printf '  [7] Network status\n'
-    printf '  [b] Back\n\n'
-    read -r -p "  › " choice
-    case "$choice" in
-      1) ./hotspot.sh install; pause ;;
-      2) ./hotspot.sh up; pause ;;
-      3) ./hotspot.sh down; pause ;;
-      4)
+    arrow_menu \
+      "Install/update PlaneLab hotspot" \
+      "Start PlaneLab hotspot" \
+      "Stop PlaneLab hotspot" \
+      "Connect temporary Wi-Fi" \
+      "Ethernet receives network (auto)" \
+      "Ethernet provides network (shared)" \
+      "Network status" \
+      "Back"
+    case "$MENU_CHOICE" in
+      0) ./hotspot.sh install; pause ;;
+      1) ./hotspot.sh up; pause ;;
+      2) ./hotspot.sh down; pause ;;
+      3)
         read -r -p "Wi-Fi name: " ssid
         read -r -s -p "Password: " password
         printf '\n'
@@ -248,35 +303,34 @@ network_menu() {
         unset password
         pause
         ;;
-      5) ./hotspot.sh ethernet auto; pause ;;
-      6) ./hotspot.sh ethernet shared; pause ;;
-      7) ./hotspot.sh status; pause ;;
-      b|B) return ;;
+      4) ./hotspot.sh ethernet auto; pause ;;
+      5) ./hotspot.sh ethernet shared; pause ;;
+      6) ./hotspot.sh status; pause ;;
+      7) return ;;
     esac
   done
 }
 
 main_menu() {
-  local choice
   while true; do
     title
     printf '  Stack:   %s\n' "$(stack_state)"
     printf '  Hotspot: %s\n\n' "$(hotspot_state)"
-    printf '  [1] First setup / reconfigure\n'
-    printf '  [2] Services\n'
-    printf '  [3] Create backup\n'
-    printf '  [4] Restore backup\n'
-    printf '  [5] Network\n'
-    printf '  [6] Open service addresses\n'
-    printf '  [q] Quit\n\n'
-    read -r -p "  › " choice
-    case "$choice" in
-      1) title; setup_stack; pause ;;
-      2) service_menu ;;
-      3) title; ./backup.sh; pause ;;
-      4) title; restore_menu; pause ;;
-      5) network_menu ;;
-      6)
+    arrow_menu \
+      "First setup / reconfigure" \
+      "Services" \
+      "Create backup" \
+      "Restore backup" \
+      "Network" \
+      "Service addresses" \
+      "Quit"
+    case "$MENU_CHOICE" in
+      0) title; setup_stack; pause ;;
+      1) service_menu ;;
+      2) title; ./backup.sh; pause ;;
+      3) title; restore_menu; pause ;;
+      4) network_menu ;;
+      5)
         title
         printf '  Jellyfin  http://10.42.0.1:8096\n'
         printf '  Seerr     http://10.42.0.1:5055\n'
@@ -285,9 +339,10 @@ main_menu() {
         printf '  Radarr    http://10.42.0.1:7878\n'
         printf '  Prowlarr  http://10.42.0.1:9696\n'
         printf '  SABnzbd   http://10.42.0.1:8080\n'
+        printf '  RDTClient http://10.42.0.1:6500\n'
         pause
         ;;
-      q|Q) title; printf '  Safe travels. ✈\n\n'; return ;;
+      6) title; printf '  Safe travels. ✈\n\n'; return ;;
     esac
   done
 }

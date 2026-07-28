@@ -13,7 +13,9 @@ The easiest way to manage the appliance is the dependency-free terminal UI:
 
 It provides first-time setup, service control and updates, backup/restore,
 hotspot and temporary uplink management, Ethernet modes, logs, status, and all
-local service addresses. The same entry point also works without the menu:
+local service addresses. Navigate with the arrow keys and Enter (`j`/`k` also
+work); numbered input remains available when no interactive terminal is
+attached. The same entry point also works without the menu:
 
 ```bash
 ./planelab setup
