@@ -13,6 +13,8 @@ Usage:
   ./hotspot.sh uplink <ssid> [password]
                                   Stop hotspot and connect to temporary Wi-Fi
   ./hotspot.sh uplink-down        Disconnect the configured uplink
+  ./hotspot.sh ethernet <auto|shared>
+                                  Configure and activate Ethernet mode
   ./hotspot.sh status             Show hotspot and Wi-Fi status
   ./hotspot.sh remove             Remove the NetworkManager profile
   ./hotspot.sh uplink-remove      Remove the uplink profile
@@ -44,6 +46,9 @@ source "$CONFIG_FILE"
 : "${WIFI_COUNTRY:=BE}"
 : "${UPLINK_INTERFACE:=$HOTSPOT_INTERFACE}"
 : "${UPLINK_CONNECTION:=planelab-uplink}"
+: "${ETHERNET_INTERFACE:=eth0}"
+: "${ETHERNET_CONNECTION:=planelab-ethernet}"
+: "${ETHERNET_SHARED_ADDRESS:=10.43.0.1/24}"
 
 if [[ "${#HOTSPOT_PASSWORD}" -lt 8 || "${#HOTSPOT_PASSWORD}" -gt 63 ]]; then
   echo "Error: HOTSPOT_PASSWORD must contain 8-63 characters." >&2
@@ -244,6 +249,52 @@ EOF
     fi
     ;;
 
+  ethernet)
+    ethernet_mode="${1:-}"
+    if [[ "$#" -ne 1 || (
+      "$ethernet_mode" != "auto" && "$ethernet_mode" != "shared"
+    ) ]]; then
+      echo "Usage: ./hotspot.sh ethernet <auto|shared>" >&2
+      exit 2
+    fi
+    if ! nmcli -t -f DEVICE,TYPE device status |
+      grep -Fqx "$ETHERNET_INTERFACE:ethernet"; then
+      echo "Error: $ETHERNET_INTERFACE is not a NetworkManager Ethernet device." >&2
+      nmcli device status >&2
+      exit 1
+    fi
+
+    if ! connection_exists "$ETHERNET_CONNECTION"; then
+      as_root nmcli connection add \
+        type ethernet \
+        ifname "$ETHERNET_INTERFACE" \
+        con-name "$ETHERNET_CONNECTION"
+    fi
+
+    if [[ "$ethernet_mode" == "auto" ]]; then
+      as_root nmcli connection modify "$ETHERNET_CONNECTION" \
+        connection.interface-name "$ETHERNET_INTERFACE" \
+        connection.autoconnect yes \
+        ipv4.method auto \
+        ipv4.addresses "" \
+        ipv6.method auto
+    else
+      as_root nmcli connection modify "$ETHERNET_CONNECTION" \
+        connection.interface-name "$ETHERNET_INTERFACE" \
+        connection.autoconnect yes \
+        ipv4.method shared \
+        ipv4.addresses "$ETHERNET_SHARED_ADDRESS" \
+        ipv6.method disabled
+    fi
+
+    as_root nmcli connection up "$ETHERNET_CONNECTION"
+    if [[ "$ethernet_mode" == "auto" ]]; then
+      echo "Ethernet mode: auto (receives its address from a router)."
+    else
+      echo "Ethernet mode: shared (PlaneLab supplies DHCP at ${ETHERNET_SHARED_ADDRESS%/*})."
+    fi
+    ;;
+
   status)
     nmcli device status
     echo
@@ -259,6 +310,12 @@ EOF
       echo "Uplink profile:"
       nmcli connection show "$UPLINK_CONNECTION" |
         grep -E '^(connection.id|connection.interface-name|connection.autoconnect|802-11-wireless.ssid|802-11-wireless.mode|802-11-wireless.hidden|ipv4.method)'
+    fi
+    if connection_exists "$ETHERNET_CONNECTION"; then
+      echo
+      echo "Ethernet profile:"
+      nmcli connection show "$ETHERNET_CONNECTION" |
+        grep -E '^(connection.id|connection.interface-name|connection.autoconnect|ipv4.method|ipv4.addresses|ipv6.method)'
     fi
     ;;
 

@@ -99,6 +99,8 @@ Useful commands:
 ./hotspot.sh status
 ./hotspot.sh down
 ./hotspot.sh up
+./hotspot.sh ethernet auto
+./hotspot.sh ethernet shared
 ./hotspot.sh remove
 ```
 
@@ -133,6 +135,27 @@ After a reboot, the PlaneLab hotspot therefore starts automatically again. A
 single Wi-Fi adapter cannot reliably serve the 5 GHz hotspot and connect to
 another Wi-Fi network simultaneously. Use Ethernet or a second Wi-Fi adapter
 if both must remain active.
+
+### Choose the Ethernet mode
+
+Use `auto` when the Pi is connected to a router and should receive an address
+and internet connection through DHCP:
+
+```bash
+./hotspot.sh ethernet auto
+```
+
+Use `shared` when a laptop or other device is connected directly to the Pi and
+the Pi should provide DHCP and networking over the Ethernet cable:
+
+```bash
+./hotspot.sh ethernet shared
+```
+
+Shared Ethernet uses `10.43.0.1/24`, separate from the Wi-Fi hotspot at
+`10.42.0.1/24`. The selected Ethernet mode persists across reboots. It does not
+change the Wi-Fi hotspot itself, which must remain in NetworkManager's `shared`
+mode to provide addresses to its Wi-Fi clients.
 
 ## Internal paths
 
