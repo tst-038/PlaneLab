@@ -10,8 +10,11 @@ Usage:
   ./hotspot.sh install [--force]  Create/update and activate the hotspot
   ./hotspot.sh up                 Activate the existing hotspot
   ./hotspot.sh down               Deactivate the hotspot
+  ./hotspot.sh uplink             Stop hotspot and connect to uplink Wi-Fi
+  ./hotspot.sh uplink-down        Disconnect the configured uplink
   ./hotspot.sh status             Show hotspot and Wi-Fi status
   ./hotspot.sh remove             Remove the NetworkManager profile
+  ./hotspot.sh uplink-remove      Remove the uplink profile
 
 Warning: installing on the Wi-Fi interface currently carrying your SSH
 connection will disconnect that session. The script refuses this unless
@@ -38,6 +41,11 @@ source "$CONFIG_FILE"
 : "${HOTSPOT_CHANNEL:=36}"
 : "${HOTSPOT_HIDDEN:=yes}"
 : "${WIFI_COUNTRY:=BE}"
+: "${UPLINK_SSID:=}"
+: "${UPLINK_PASSWORD:=}"
+: "${UPLINK_INTERFACE:=$HOTSPOT_INTERFACE}"
+: "${UPLINK_CONNECTION:=planelab-uplink}"
+: "${UPLINK_HIDDEN:=no}"
 
 if [[ "${#HOTSPOT_PASSWORD}" -lt 8 || "${#HOTSPOT_PASSWORD}" -gt 63 ]]; then
   echo "Error: HOTSPOT_PASSWORD must contain 8-63 characters." >&2
@@ -63,7 +71,8 @@ as_root() {
 }
 
 connection_exists() {
-  nmcli -t -f NAME connection show | grep -Fxq "$HOTSPOT_CONNECTION"
+  local connection_name="${1:-$HOTSPOT_CONNECTION}"
+  nmcli -t -f NAME connection show | grep -Fxq "$connection_name"
 }
 
 show_urls() {
@@ -173,6 +182,9 @@ EOF
       echo "Error: hotspot is not installed. Run ./hotspot.sh install." >&2
       exit 1
     fi
+    if connection_exists "$UPLINK_CONNECTION"; then
+      as_root nmcli connection down "$UPLINK_CONNECTION" || true
+    fi
     as_root nmcli connection up "$HOTSPOT_CONNECTION"
     show_urls
     ;;
@@ -180,6 +192,58 @@ EOF
   down)
     if connection_exists; then
       as_root nmcli connection down "$HOTSPOT_CONNECTION" || true
+    fi
+    ;;
+
+  uplink)
+    if [[ -z "$UPLINK_SSID" || -z "$UPLINK_PASSWORD" ]]; then
+      echo "Error: set UPLINK_SSID and UPLINK_PASSWORD in hotspot.env." >&2
+      exit 1
+    fi
+    if [[ "${#UPLINK_PASSWORD}" -lt 8 || "${#UPLINK_PASSWORD}" -gt 63 ]]; then
+      echo "Error: UPLINK_PASSWORD must contain 8-63 characters." >&2
+      exit 1
+    fi
+    if ! nmcli -t -f DEVICE,TYPE device status |
+      grep -Fqx "$UPLINK_INTERFACE:wifi"; then
+      echo "Error: $UPLINK_INTERFACE is not a NetworkManager Wi-Fi device." >&2
+      nmcli device status >&2
+      exit 1
+    fi
+
+    as_root nmcli radio wifi on
+    if connection_exists; then
+      as_root nmcli connection down "$HOTSPOT_CONNECTION" || true
+    fi
+
+    if ! connection_exists "$UPLINK_CONNECTION"; then
+      as_root nmcli connection add \
+        type wifi \
+        ifname "$UPLINK_INTERFACE" \
+        con-name "$UPLINK_CONNECTION" \
+        ssid "$UPLINK_SSID"
+    fi
+
+    as_root nmcli connection modify "$UPLINK_CONNECTION" \
+      connection.interface-name "$UPLINK_INTERFACE" \
+      connection.autoconnect no \
+      802-11-wireless.mode infrastructure \
+      802-11-wireless.ssid "$UPLINK_SSID" \
+      802-11-wireless.hidden "$UPLINK_HIDDEN" \
+      802-11-wireless-security.key-mgmt wpa-psk \
+      802-11-wireless-security.psk "$UPLINK_PASSWORD" \
+      ipv4.method auto \
+      ipv6.method auto
+
+    as_root nmcli connection up "$UPLINK_CONNECTION" \
+      ifname "$UPLINK_INTERFACE"
+    echo "Connected to uplink Wi-Fi: $UPLINK_SSID"
+    echo "Return to PlaneLab mode with: ./hotspot.sh up"
+    ;;
+
+  uplink-down)
+    if connection_exists "$UPLINK_CONNECTION"; then
+      as_root nmcli connection down "$UPLINK_CONNECTION" || true
     fi
     ;;
 
@@ -193,6 +257,12 @@ EOF
     else
       echo "Hotspot profile '$HOTSPOT_CONNECTION' is not installed."
     fi
+    if connection_exists "$UPLINK_CONNECTION"; then
+      echo
+      echo "Uplink profile:"
+      nmcli connection show "$UPLINK_CONNECTION" |
+        grep -E '^(connection.id|connection.interface-name|connection.autoconnect|802-11-wireless.ssid|802-11-wireless.mode|802-11-wireless.hidden|ipv4.method)'
+    fi
     ;;
 
   remove)
@@ -201,6 +271,15 @@ EOF
       echo "Removed hotspot profile: $HOTSPOT_CONNECTION"
     else
       echo "Hotspot profile does not exist."
+    fi
+    ;;
+
+  uplink-remove)
+    if connection_exists "$UPLINK_CONNECTION"; then
+      as_root nmcli connection delete "$UPLINK_CONNECTION"
+      echo "Removed uplink profile: $UPLINK_CONNECTION"
+    else
+      echo "Uplink profile does not exist."
     fi
     ;;
 

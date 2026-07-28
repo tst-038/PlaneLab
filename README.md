@@ -105,6 +105,35 @@ Useful commands:
 The connection profile autostarts after reboot. PlaneLab is always reached
 directly through the fixed address `10.42.0.1`.
 
+### Temporarily connect to uplink Wi-Fi
+
+Set the optional uplink credentials in the private `hotspot.env`:
+
+```dotenv
+UPLINK_SSID=WorkshopWiFi
+UPLINK_PASSWORD=replace-with-the-real-password
+UPLINK_INTERFACE=wlan0
+UPLINK_CONNECTION=planelab-uplink
+UPLINK_HIDDEN=no
+```
+
+Switch the built-in adapter from hotspot to Wi-Fi client mode:
+
+```bash
+./hotspot.sh uplink
+```
+
+Return to PlaneLab hotspot mode:
+
+```bash
+./hotspot.sh up
+```
+
+The uplink profile does not autoconnect. After a reboot, the PlaneLab hotspot
+therefore starts automatically again. A single Wi-Fi adapter cannot reliably
+serve the 5 GHz hotspot and connect to another Wi-Fi network simultaneously.
+Use Ethernet or a second Wi-Fi adapter if both must remain active.
+
 ## Internal paths
 
 Configure applications with container paths, never host paths:
