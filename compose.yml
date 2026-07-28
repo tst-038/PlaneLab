@@ -148,21 +148,31 @@ services:
 volumes:
   jellyfin_config:
     name: planelab_jellyfin_config
+    external: true
   jellyfin_cache:
     name: planelab_jellyfin_cache
+    external: true
   seerr_config:
     name: planelab_seerr_config
+    external: true
   prowlarr_config:
     name: planelab_prowlarr_config
+    external: true
   sonarr_config:
     name: planelab_sonarr_config
+    external: true
   radarr_config:
     name: planelab_radarr_config
+    external: true
   sabnzbd_config:
     name: planelab_sabnzbd_config
+    external: true
   rdtclient_data:
     name: planelab_rdtclient_data
+    external: true
   youtarr_database:
     name: planelab_youtarr_database
+    external: true
   youtarr_config:
     name: planelab_youtarr_config
+    external: true

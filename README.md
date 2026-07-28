@@ -22,6 +22,7 @@ machine. Use it only with media and sources you are authorized to access.
 cp .env.example .env
 mkdir -p data/media/{movies,shows,YouTube}
 mkdir -p data/downloads/{incomplete,complete/{radarr,sonarr}}
+./prepare.sh
 docker compose config
 docker compose pull
 docker compose up -d
@@ -49,6 +50,13 @@ DOWNLOAD_ROOT=/mnt/nvme/downloads
 
 Never start the stack until `/mnt/nvme` is mounted. Otherwise Docker may create
 the directories on the Pi's SD card.
+
+Create the external application volumes before the first start:
+
+```bash
+./prepare.sh
+docker compose up -d
+```
 
 ## Internal paths
 
@@ -102,7 +110,7 @@ It never touches media or download directories.
 
 ```bash
 git init
-git add compose.yml .env.example .gitignore backup.sh restore.sh README.md
+git add compose.yml .env.example .gitignore prepare.sh backup.sh restore.sh README.md
 git commit -m "Initial PlaneLab stack"
 ```
 
@@ -119,5 +127,7 @@ docker compose exec radarr ls -la /media/movies
 docker compose exec sabnzbd ls -la /downloads
 ```
 
-Never use `docker compose down -v` unless you intentionally want to delete all
-application configuration volumes.
+Application volumes are declared `external: true`. Compose therefore reuses
+volumes restored or created by `prepare.sh`, and even `docker compose down -v`
+will not delete them. Delete an external volume only with an explicit
+`docker volume rm planelab_...` command.

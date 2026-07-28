@@ -79,6 +79,10 @@ for archive_path in "${archives[@]}"; do
     tar -xzf "/backup/$archive_name" -C /target
 done
 
+# External volumes must exist before Compose starts. This also creates volumes
+# intentionally excluded from backup, such as the disposable Jellyfin cache.
+"$SCRIPT_DIR/prepare.sh"
+
 if [[ ! -f .env && -f "$BACKUP_DIR/.env" ]]; then
   cp "$BACKUP_DIR/.env" .env
   chmod 600 .env
