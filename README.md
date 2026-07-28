@@ -107,20 +107,18 @@ directly through the fixed address `10.42.0.1`.
 
 ### Temporarily connect to uplink Wi-Fi
 
-Set the optional uplink credentials in the private `hotspot.env`:
-
-```dotenv
-UPLINK_SSID=WorkshopWiFi
-UPLINK_PASSWORD=replace-with-the-real-password
-UPLINK_INTERFACE=wlan0
-UPLINK_CONNECTION=planelab-uplink
-UPLINK_HIDDEN=no
-```
-
-Switch the built-in adapter from hotspot to Wi-Fi client mode:
+Switch the built-in adapter from hotspot to Wi-Fi client mode. Supplying only
+the SSID makes the script ask for the password without displaying it:
 
 ```bash
-./hotspot.sh uplink
+./hotspot.sh uplink "WorkshopWiFi"
+```
+
+For maximum convenience, the password can also be supplied directly. Be aware
+that this may store it in your shell history:
+
+```bash
+./hotspot.sh uplink "WorkshopWiFi" "the-password"
 ```
 
 Return to PlaneLab hotspot mode:
@@ -129,10 +127,12 @@ Return to PlaneLab hotspot mode:
 ./hotspot.sh up
 ```
 
-The uplink profile does not autoconnect. After a reboot, the PlaneLab hotspot
-therefore starts automatically again. A single Wi-Fi adapter cannot reliably
-serve the 5 GHz hotspot and connect to another Wi-Fi network simultaneously.
-Use Ethernet or a second Wi-Fi adapter if both must remain active.
+The script automatically stops the hotspot, uses NetworkManager's normal
+`device wifi connect` flow, and marks the temporary uplink as non-autoconnect.
+After a reboot, the PlaneLab hotspot therefore starts automatically again. A
+single Wi-Fi adapter cannot reliably serve the 5 GHz hotspot and connect to
+another Wi-Fi network simultaneously. Use Ethernet or a second Wi-Fi adapter
+if both must remain active.
 
 ## Internal paths
 

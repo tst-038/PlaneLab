@@ -10,7 +10,8 @@ Usage:
   ./hotspot.sh install [--force]  Create/update and activate the hotspot
   ./hotspot.sh up                 Activate the existing hotspot
   ./hotspot.sh down               Deactivate the hotspot
-  ./hotspot.sh uplink             Stop hotspot and connect to uplink Wi-Fi
+  ./hotspot.sh uplink <ssid> [password]
+                                  Stop hotspot and connect to temporary Wi-Fi
   ./hotspot.sh uplink-down        Disconnect the configured uplink
   ./hotspot.sh status             Show hotspot and Wi-Fi status
   ./hotspot.sh remove             Remove the NetworkManager profile
@@ -41,11 +42,8 @@ source "$CONFIG_FILE"
 : "${HOTSPOT_CHANNEL:=36}"
 : "${HOTSPOT_HIDDEN:=yes}"
 : "${WIFI_COUNTRY:=BE}"
-: "${UPLINK_SSID:=}"
-: "${UPLINK_PASSWORD:=}"
 : "${UPLINK_INTERFACE:=$HOTSPOT_INTERFACE}"
 : "${UPLINK_CONNECTION:=planelab-uplink}"
-: "${UPLINK_HIDDEN:=no}"
 
 if [[ "${#HOTSPOT_PASSWORD}" -lt 8 || "${#HOTSPOT_PASSWORD}" -gt 63 ]]; then
   echo "Error: HOTSPOT_PASSWORD must contain 8-63 characters." >&2
@@ -196,14 +194,18 @@ EOF
     ;;
 
   uplink)
-    if [[ -z "$UPLINK_SSID" || -z "$UPLINK_PASSWORD" ]]; then
-      echo "Error: set UPLINK_SSID and UPLINK_PASSWORD in hotspot.env." >&2
+    if [[ "$#" -lt 1 || "$#" -gt 2 ]]; then
+      echo "Usage: ./hotspot.sh uplink <ssid> [password]" >&2
       exit 1
     fi
-    if [[ "${#UPLINK_PASSWORD}" -lt 8 || "${#UPLINK_PASSWORD}" -gt 63 ]]; then
-      echo "Error: UPLINK_PASSWORD must contain 8-63 characters." >&2
-      exit 1
+
+    uplink_ssid="$1"
+    uplink_password="${2:-}"
+    if [[ -z "$uplink_password" ]]; then
+      read -r -s -p "Password for '$uplink_ssid': " uplink_password
+      echo
     fi
+
     if ! nmcli -t -f DEVICE,TYPE device status |
       grep -Fqx "$UPLINK_INTERFACE:wifi"; then
       echo "Error: $UPLINK_INTERFACE is not a NetworkManager Wi-Fi device." >&2
@@ -216,28 +218,23 @@ EOF
       as_root nmcli connection down "$HOTSPOT_CONNECTION" || true
     fi
 
-    if ! connection_exists "$UPLINK_CONNECTION"; then
-      as_root nmcli connection add \
-        type wifi \
-        ifname "$UPLINK_INTERFACE" \
-        con-name "$UPLINK_CONNECTION" \
-        ssid "$UPLINK_SSID"
+    if connection_exists "$UPLINK_CONNECTION"; then
+      as_root nmcli connection delete "$UPLINK_CONNECTION"
     fi
 
-    as_root nmcli connection modify "$UPLINK_CONNECTION" \
-      connection.interface-name "$UPLINK_INTERFACE" \
-      connection.autoconnect no \
-      802-11-wireless.mode infrastructure \
-      802-11-wireless.ssid "$UPLINK_SSID" \
-      802-11-wireless.hidden "$UPLINK_HIDDEN" \
-      802-11-wireless-security.key-mgmt wpa-psk \
-      802-11-wireless-security.psk "$UPLINK_PASSWORD" \
-      ipv4.method auto \
-      ipv6.method auto
+    if ! as_root nmcli device wifi connect "$uplink_ssid" \
+      password "$uplink_password" \
+      ifname "$UPLINK_INTERFACE" \
+      name "$UPLINK_CONNECTION"; then
+      echo "Uplink failed; restoring the PlaneLab hotspot." >&2
+      as_root nmcli connection up "$HOTSPOT_CONNECTION" || true
+      exit 1
+    fi
 
-    as_root nmcli connection up "$UPLINK_CONNECTION" \
-      ifname "$UPLINK_INTERFACE"
-    echo "Connected to uplink Wi-Fi: $UPLINK_SSID"
+    # Never let temporary Wi-Fi replace the PlaneLab hotspot after a reboot.
+    as_root nmcli connection modify "$UPLINK_CONNECTION" connection.autoconnect no
+
+    echo "Connected to uplink Wi-Fi: $uplink_ssid"
     echo "Return to PlaneLab mode with: ./hotspot.sh up"
     ;;
 
