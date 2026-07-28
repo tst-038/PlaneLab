@@ -38,7 +38,6 @@ source "$CONFIG_FILE"
 : "${HOTSPOT_CHANNEL:=36}"
 : "${HOTSPOT_HIDDEN:=yes}"
 : "${WIFI_COUNTRY:=BE}"
-: "${PLANELAB_HOSTNAME:=planelab}"
 
 if [[ "${#HOTSPOT_PASSWORD}" -lt 8 || "${#HOTSPOT_PASSWORD}" -gt 63 ]]; then
   echo "Error: HOTSPOT_PASSWORD must contain 8-63 characters." >&2
@@ -77,9 +76,6 @@ PlaneLab:
   Jellyfin  http://$hotspot_ip:8096
   Seerr     http://$hotspot_ip:5055
   Youtarr   http://$hotspot_ip:3087
-
-If Avahi is installed and running, also try:
-  http://$PLANELAB_HOSTNAME.local:8096
 EOF
 }
 
@@ -167,10 +163,6 @@ EOF
       ipv4.method shared \
       ipv4.addresses "$HOTSPOT_ADDRESS" \
       ipv6.method disabled
-
-    if command -v hostnamectl >/dev/null 2>&1; then
-      as_root hostnamectl set-hostname "$PLANELAB_HOSTNAME"
-    fi
 
     as_root nmcli connection up "$HOTSPOT_CONNECTION"
     show_urls

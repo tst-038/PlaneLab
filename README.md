@@ -102,9 +102,8 @@ Useful commands:
 ./hotspot.sh remove
 ```
 
-The connection profile autostarts after reboot. For `planelab.local` discovery,
-install and enable Avahi; the numeric address `10.42.0.1` works independently
-of mDNS.
+The connection profile autostarts after reboot. PlaneLab is always reached
+directly through the fixed address `10.42.0.1`.
 
 ## Internal paths
 
