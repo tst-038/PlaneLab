@@ -78,12 +78,12 @@ The default hotspot is:
 ```text
 SSID: PlaneLab
 Pi address: 10.42.0.1
-Band: 2.4 GHz
+Band: 5 GHz, channel 36
 ```
 
 NetworkManager's shared IPv4 mode supplies DHCP and DNS to passengers and
 shares an Ethernet/second-adapter uplink when one exists. No uplink is required
-to use Jellyfin offline. Client isolation is enabled.
+to use Jellyfin offline. Client isolation and connection autostart are enabled.
 
 Useful commands:
 
