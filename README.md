@@ -58,6 +58,46 @@ Create the external application volumes before the first start:
 docker compose up -d
 ```
 
+## PlaneLab Wi-Fi hotspot
+
+Raspberry Pi OS Bookworm and newer use NetworkManager. Configure a persistent
+hotspot with:
+
+```bash
+cp hotspot.env.example hotspot.env
+nano hotspot.env
+./hotspot.sh install
+```
+
+Run this from a local console or an Ethernet SSH session. If `wlan0` currently
+carries SSH, the script refuses to disconnect it unless you explicitly use
+`./hotspot.sh install --force`.
+
+The default hotspot is:
+
+```text
+SSID: PlaneLab
+Pi address: 10.42.0.1
+Band: 2.4 GHz
+```
+
+NetworkManager's shared IPv4 mode supplies DHCP and DNS to passengers and
+shares an Ethernet/second-adapter uplink when one exists. No uplink is required
+to use Jellyfin offline. Client isolation is enabled.
+
+Useful commands:
+
+```bash
+./hotspot.sh status
+./hotspot.sh down
+./hotspot.sh up
+./hotspot.sh remove
+```
+
+The connection profile autostarts after reboot. For `planelab.local` discovery,
+install and enable Avahi; the numeric address `10.42.0.1` works independently
+of mDNS.
+
 ## Internal paths
 
 Configure applications with container paths, never host paths:
@@ -116,7 +156,7 @@ It never touches media or download directories.
 
 ```bash
 git init
-git add compose.yml .env.example .gitignore prepare.sh backup.sh restore.sh README.md
+git add compose.yml .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh hotspot.sh README.md
 git commit -m "Initial PlaneLab stack"
 ```
 
