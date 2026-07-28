@@ -37,6 +37,44 @@ if [[ "${#archives[@]}" -eq 0 ]]; then
   exit 1
 fi
 
+if [[ ! -f .env ]]; then
+  if [[ -f "$BACKUP_DIR/.env" ]]; then
+    cp "$BACKUP_DIR/.env" .env
+    chmod 600 .env
+    cat <<'EOF'
+Created .env from the backup, but restore has NOT started.
+
+Edit .env and set the Raspberry Pi storage paths:
+  MEDIA_ROOT=/mnt/nvme/media
+  DOWNLOAD_ROOT=/mnt/nvme/downloads
+
+Verify that /mnt/nvme is mounted, then run the same restore command again.
+EOF
+    exit 2
+  fi
+
+  echo "Error: .env is missing. Create it from .env.example before restore." >&2
+  exit 1
+fi
+
+media_root="$(sed -n 's/^MEDIA_ROOT=//p' .env | tail -n 1)"
+download_root="$(sed -n 's/^DOWNLOAD_ROOT=//p' .env | tail -n 1)"
+if [[ "$media_root" != /mnt/nvme/* || "$download_root" != /mnt/nvme/* ]]; then
+  cat >&2 <<EOF
+Error: restore on the Pi requires NVMe paths in .env.
+Current MEDIA_ROOT: ${media_root:-missing}
+Current DOWNLOAD_ROOT: ${download_root:-missing}
+
+Expected paths below /mnt/nvme to avoid writing media to the SD card.
+EOF
+  exit 1
+fi
+
+if ! mountpoint -q /mnt/nvme; then
+  echo "Error: /mnt/nvme is not a mounted filesystem." >&2
+  exit 1
+fi
+
 echo "Stopping PlaneLab..."
 docker compose down
 
@@ -82,12 +120,6 @@ done
 # External volumes must exist before Compose starts. This also creates volumes
 # intentionally excluded from backup, such as the disposable Jellyfin cache.
 "$SCRIPT_DIR/prepare.sh"
-
-if [[ ! -f .env && -f "$BACKUP_DIR/.env" ]]; then
-  cp "$BACKUP_DIR/.env" .env
-  chmod 600 .env
-  echo "Restored .env; verify MEDIA_ROOT and DOWNLOAD_ROOT for this machine."
-fi
 
 echo "Starting PlaneLab..."
 docker compose up -d

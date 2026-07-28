@@ -150,6 +150,11 @@ Copy a timestamped backup directory into `backups/`, then run:
 ./restore.sh backups/20260728T120000Z
 ```
 
+If `.env` does not exist, restore copies it from the backup and stops so you
+can change the Mac paths to `/mnt/nvme/...`. Run the restore command again only
+after `/mnt/nvme` is mounted. The script refuses Pi restores using paths outside
+that mounted filesystem.
+
 Restore refuses non-empty volumes. To deliberately replace an existing
 installation:
 
