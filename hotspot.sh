@@ -49,6 +49,8 @@ source "$CONFIG_FILE"
 : "${ETHERNET_INTERFACE:=eth0}"
 : "${ETHERNET_CONNECTION:=planelab-ethernet}"
 : "${ETHERNET_SHARED_ADDRESS:=10.42.1.1/24}"
+: "${ETHERNET_SMART_WATCH:=yes}"
+: "${ETHERNET_WATCH_SERVICE:=planelab-ethernet-watch.service}"
 
 if [[ "${#HOTSPOT_PASSWORD}" -lt 8 || "${#HOTSPOT_PASSWORD}" -gt 63 ]]; then
   echo "Error: HOTSPOT_PASSWORD must contain 8-63 characters." >&2
@@ -89,6 +91,58 @@ PlaneLab:
   Seerr     http://$hotspot_ip:5055
   Youtarr   http://$hotspot_ip:3087
 EOF
+}
+
+install_ethernet_watch() {
+  local unit_path unit_file
+  command -v systemctl >/dev/null 2>&1 || return
+  if [[ "$ETHERNET_SMART_WATCH" != "yes" ]]; then
+    remove_ethernet_watch
+    echo "Automatic Ethernet smart detection is disabled."
+    return
+  fi
+
+  if [[ "$SCRIPT_DIR" == *'"'* || "$SCRIPT_DIR" == *$'\n'* ]]; then
+    echo "Error: PlaneLab path cannot contain quotes or newlines." >&2
+    return 1
+  fi
+
+  unit_path="/etc/systemd/system/$ETHERNET_WATCH_SERVICE"
+  unit_file="$(mktemp)"
+  {
+    cat <<EOF
+[Unit]
+Description=PlaneLab automatic Ethernet mode detection
+After=NetworkManager.service
+Requires=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/bin/bash "$SCRIPT_DIR/ethernet-watch.sh" "$ETHERNET_INTERFACE" "$HOTSPOT_CONNECTION" "$SCRIPT_DIR/hotspot.sh"
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  } > "$unit_file"
+
+  as_root install -o root -g root -m 0644 "$unit_file" "$unit_path"
+  rm -f "$unit_file"
+  as_root systemctl daemon-reload
+  as_root systemctl enable --now "$ETHERNET_WATCH_SERVICE"
+  echo "Automatic Ethernet smart detection is enabled."
+}
+
+remove_ethernet_watch() {
+  local unit_path
+  command -v systemctl >/dev/null 2>&1 || return
+  unit_path="/etc/systemd/system/$ETHERNET_WATCH_SERVICE"
+  as_root systemctl disable --now "$ETHERNET_WATCH_SERVICE" 2>/dev/null || true
+  if [[ -e "$unit_path" ]]; then
+    as_root rm -f "$unit_path"
+    as_root systemctl daemon-reload
+  fi
 }
 
 command_name="${1:-}"
@@ -177,6 +231,7 @@ EOF
       ipv6.method disabled
 
     as_root nmcli connection up "$HOTSPOT_CONNECTION"
+    install_ethernet_watch
     show_urls
     ;;
 
@@ -297,6 +352,7 @@ EOF
       fi
 
       echo "No DHCP uplink found; switching Ethernet to shared mode."
+      as_root nmcli connection down "$ETHERNET_CONNECTION" 2>/dev/null || true
       as_root nmcli connection modify "$ETHERNET_CONNECTION" \
         connection.interface-name "$ETHERNET_INTERFACE" \
         connection.autoconnect yes \
@@ -336,9 +392,18 @@ EOF
       nmcli connection show "$ETHERNET_CONNECTION" |
         grep -E '^(connection.id|connection.interface-name|connection.autoconnect|ipv4.method|ipv4.addresses|ipv6.method)'
     fi
+    if command -v systemctl >/dev/null 2>&1; then
+      echo
+      if systemctl is-enabled --quiet "$ETHERNET_WATCH_SERVICE" 2>/dev/null; then
+        echo "Automatic Ethernet smart detection: enabled"
+      else
+        echo "Automatic Ethernet smart detection: disabled"
+      fi
+    fi
     ;;
 
   remove)
+    remove_ethernet_watch
     if connection_exists; then
       as_root nmcli connection delete "$HOTSPOT_CONNECTION"
       echo "Removed hotspot profile: $HOTSPOT_CONNECTION"

@@ -129,7 +129,8 @@ Useful commands:
 ```
 
 The connection profile autostarts after reboot. PlaneLab is always reached
-directly through the fixed address `10.42.0.1`.
+directly through the fixed address `10.42.0.1`. Installing the hotspot also
+enables automatic Ethernet smart detection as a systemd service.
 
 ### Temporarily connect to uplink Wi-Fi
 
@@ -169,6 +170,14 @@ switches the port to shared mode:
 ```bash
 ./hotspot.sh ethernet smart
 ```
+
+This is the default behaviour after `./hotspot.sh install`. A lightweight
+watcher checks for Ethernet carrier changes and reruns smart detection whenever
+a cable is connected while the PlaneLab hotspot is active. It also detects an
+already connected cable when the hotspot starts or the Pi reboots. The watcher
+does nothing while PlaneLab is using temporary uplink Wi-Fi. Disable this
+automation by setting `ETHERNET_SMART_WATCH=no` before reinstalling the hotspot;
+`./hotspot.sh remove` removes the installed systemd service.
 
 Use `auto` when the Pi is connected to a router and should receive an address
 and internet connection through DHCP:
@@ -252,7 +261,7 @@ It never touches media or download directories.
 
 ```bash
 git init
-git add compose.yml .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh hotspot.sh planelab README.md
+git add compose.yml .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh hotspot.sh ethernet-watch.sh planelab README.md
 git commit -m "Initial PlaneLab stack"
 ```
 
