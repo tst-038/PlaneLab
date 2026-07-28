@@ -48,7 +48,7 @@ source "$CONFIG_FILE"
 : "${UPLINK_CONNECTION:=planelab-uplink}"
 : "${ETHERNET_INTERFACE:=eth0}"
 : "${ETHERNET_CONNECTION:=planelab-ethernet}"
-: "${ETHERNET_SHARED_ADDRESS:=10.43.0.1/24}"
+: "${ETHERNET_SHARED_ADDRESS:=10.42.1.1/24}"
 
 if [[ "${#HOTSPOT_PASSWORD}" -lt 8 || "${#HOTSPOT_PASSWORD}" -gt 63 ]]; then
   echo "Error: HOTSPOT_PASSWORD must contain 8-63 characters." >&2

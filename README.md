@@ -14,8 +14,9 @@ The easiest way to manage the appliance is the dependency-free terminal UI:
 It provides first-time setup, service control and updates, backup/restore,
 hotspot and temporary uplink management, Ethernet modes, logs, status, and all
 local service addresses. Navigate with the arrow keys and Enter (`j`/`k` also
-work); numbered input remains available when no interactive terminal is
-attached. The same entry point also works without the menu:
+work), and press Escape to return to the previous screen. Numbered input
+remains available when no interactive terminal is attached. The same entry
+point also works without the menu:
 
 ```bash
 ./planelab setup
@@ -174,7 +175,7 @@ the Pi should provide DHCP and networking over the Ethernet cable:
 ./hotspot.sh ethernet shared
 ```
 
-Shared Ethernet uses `10.43.0.1/24`, separate from the Wi-Fi hotspot at
+Shared Ethernet uses `10.42.1.1/24`, separate from the Wi-Fi hotspot at
 `10.42.0.1/24`. The selected Ethernet mode persists across reboots. It does not
 change the Wi-Fi hotspot itself, which must remain in NetworkManager's `shared`
 mode to provide addresses to its Wi-Fi clients.
