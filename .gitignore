@@ -1,0 +1,10 @@
+.DS_Store
+.env
+backups/
+data/
+*.log
+*.tar
+*.tar.gz
+*.tgz
+*.zst
+*.age

@@ -1,0 +1,168 @@
+name: planelab
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    init: true
+    restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "8096:8096"
+    environment:
+      TZ: ${TZ:-Europe/Brussels}
+    volumes:
+      - jellyfin_config:/config
+      - jellyfin_cache:/cache
+      - ${MEDIA_ROOT:?Set MEDIA_ROOT in .env}:/media
+
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true
+    restart: unless-stopped
+    ports:
+      - "5055:5055"
+    environment:
+      TZ: ${TZ:-Europe/Brussels}
+      LOG_LEVEL: info
+    volumes:
+      - seerr_config:/app/config
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:5055/api/v1/settings/public || exit 1"]
+      start_period: 20s
+      timeout: 3s
+      interval: 15s
+      retries: 3
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    restart: unless-stopped
+    ports:
+      - "9696:9696"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Brussels}
+    volumes:
+      - prowlarr_config:/config
+
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    restart: unless-stopped
+    ports:
+      - "8989:8989"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Brussels}
+    volumes:
+      - sonarr_config:/config
+      - ${MEDIA_ROOT:?Set MEDIA_ROOT in .env}:/media
+      - ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}:/downloads
+
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    restart: unless-stopped
+    ports:
+      - "7878:7878"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Brussels}
+    volumes:
+      - radarr_config:/config
+      - ${MEDIA_ROOT:?Set MEDIA_ROOT in .env}:/media
+      - ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}:/downloads
+
+  sabnzbd:
+    image: lscr.io/linuxserver/sabnzbd:latest
+    container_name: sabnzbd
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Brussels}
+    volumes:
+      - sabnzbd_config:/config
+      - ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}:/downloads
+
+  rdtclient:
+    image: rogerfar/rdtclient:latest
+    container_name: rdtclient
+    restart: unless-stopped
+    ports:
+      - "6500:6500"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Brussels}
+    volumes:
+      - rdtclient_data:/data/db
+      - ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}:/downloads
+
+  mariadb:
+    image: mariadb:11
+    container_name: youtarr-db
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env}
+      MARIADB_DATABASE: youtarr
+      MARIADB_USER: youtarr
+      MARIADB_PASSWORD: ${YOUTARR_DB_PASSWORD:?Set YOUTARR_DB_PASSWORD in .env}
+      TZ: ${TZ:-Europe/Brussels}
+    volumes:
+      - youtarr_database:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  youtarr:
+    image: dialmaster/youtarr:latest
+    container_name: youtarr
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "3087:3011"
+    environment:
+      TZ: ${TZ:-Europe/Brussels}
+      DB_HOST: mariadb
+      DB_PORT: "3306"
+      DB_NAME: youtarr
+      DB_USER: youtarr
+      DB_PASSWORD: ${YOUTARR_DB_PASSWORD:?Set YOUTARR_DB_PASSWORD in .env}
+      YOUTUBE_OUTPUT_DIR: /downloads
+    volumes:
+      - youtarr_config:/app/config
+      - ${MEDIA_ROOT:?Set MEDIA_ROOT in .env}/YouTube:/downloads
+
+volumes:
+  jellyfin_config:
+    name: planelab_jellyfin_config
+  jellyfin_cache:
+    name: planelab_jellyfin_cache
+  seerr_config:
+    name: planelab_seerr_config
+  prowlarr_config:
+    name: planelab_prowlarr_config
+  sonarr_config:
+    name: planelab_sonarr_config
+  radarr_config:
+    name: planelab_radarr_config
+  sabnzbd_config:
+    name: planelab_sabnzbd_config
+  rdtclient_data:
+    name: planelab_rdtclient_data
+  youtarr_database:
+    name: planelab_youtarr_database
+  youtarr_config:
+    name: planelab_youtarr_config
