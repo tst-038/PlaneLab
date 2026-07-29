@@ -1,0 +1,29 @@
+{
+  "libraries": [
+    {
+      "key": "offline_movies",
+      "path": "/media/offline/movies",
+      "modes": ["prepare", "travel"]
+    },
+    {
+      "key": "offline_shows",
+      "path": "/media/offline/shows",
+      "modes": ["prepare", "travel"]
+    },
+    {
+      "key": "online_movies",
+      "path": "/media/gelato/movies",
+      "modes": ["home", "prepare"]
+    },
+    {
+      "key": "online_shows",
+      "path": "/media/gelato/shows",
+      "modes": ["home", "prepare"]
+    },
+    {
+      "key": "youtube",
+      "path": "/media/YouTube",
+      "modes": ["prepare", "travel"]
+    }
+  ]
+}

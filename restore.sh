@@ -179,6 +179,10 @@ done
 # intentionally excluded from backup, such as the disposable Jellyfin cache.
 "$SCRIPT_DIR/prepare.sh"
 
+if [[ -f "$BACKUP_DIR/library-modes.json" ]]; then
+  cp "$BACKUP_DIR/library-modes.json" "$SCRIPT_DIR/library-modes.json"
+fi
+
 echo "Starting PlaneLab..."
 restored_mode=""
 if [[ -f "$BACKUP_DIR/.planelab-mode" ]]; then

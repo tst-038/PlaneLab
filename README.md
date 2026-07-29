@@ -51,13 +51,15 @@ behaviour without deleting containers or splitting backups:
 
 | Mode | Intended machine | Running services | Visible managed libraries |
 |---|---|---|---|
-| `home` | Home server | Jellyfin and Traefik | Gelato online movies/series |
-| `prepare` | Pi with internet | Full stack | Online and offline movies/series |
-| `travel` | Pi while travelling | Jellyfin and Traefik | Offline movies/series |
+| `home` | Home server | Jellyfin and Traefik | Gelato movies/series |
+| `prepare` | Pi with internet | Full stack, including Youtarr and all download services | Online, offline and YouTube |
+| `travel` | Pi while travelling | Jellyfin and Traefik | Offline movies/series and YouTube |
 
-Unmanaged Jellyfin libraries such as YouTube, music or photos remain visible in
-every mode. Modes change library access for existing Jellyfin users; they do
-not delete or recreate libraries. A comma-separated
+Youtarr, MariaDB, Seerr, Sonarr, Radarr, Prowlarr, SABnzbd, RDTClient and the
+Usenet proxy run only in `prepare`. YouTube is hidden at home and visible in
+`prepare` and `travel`. Other unmanaged Jellyfin libraries such as music or
+photos remain visible in every mode. Modes change library access for existing
+Jellyfin users; they do not delete or recreate libraries. A comma-separated
 `JELLYFIN_EXCLUDED_USERS` value can exempt specific accounts.
 
 Create an API key under **Jellyfin Dashboard -> Advanced -> API Keys**, then
@@ -71,7 +73,7 @@ JELLYFIN_EXCLUDED_USERS=
 PLANELAB_TRAVEL_HOTSPOT=auto
 ```
 
-All four managed libraries must exist with these exact container paths before
+All configured libraries must exist with these exact container paths before
 the first mode switch:
 
 ```text
@@ -79,7 +81,13 @@ the first mode switch:
 /media/offline/shows
 /media/gelato/movies
 /media/gelato/shows
+/media/YouTube
 ```
+
+The mapping is data-driven in `library-modes.json`. Each entry defines a
+container path and the modes in which it is visible. Add or change libraries
+there without editing the Python helper. The file is included in every backup
+and restored with the application state.
 
 Switch from the TUI or command line:
 

@@ -62,7 +62,7 @@ for volume_name in "${VOLUMES[@]}"; do
     tar -czf "/backup/$volume_name.tar.gz" -C /source .
 done
 
-cp compose.yml traefik.yml traefik-dynamic.yml "$BACKUP_DIR/"
+cp compose.yml traefik.yml traefik-dynamic.yml library-modes.json "$BACKUP_DIR/"
 if [[ -f .planelab-mode ]]; then
   cp .planelab-mode "$BACKUP_DIR/"
 fi
