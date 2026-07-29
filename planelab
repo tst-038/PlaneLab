@@ -286,6 +286,22 @@ restore_menu() {
   ((index < ${#backups[@]})) || return
   selected="${backups[$index]}"
 
+  if [[ -f .env ]]; then
+    local restore_media_root restore_download_root
+    restore_media_root="$(sed -n 's/^MEDIA_ROOT=//p' .env | tail -n 1)"
+    restore_download_root="$(sed -n 's/^DOWNLOAD_ROOT=//p' .env | tail -n 1)"
+    if [[ -z "$restore_media_root" || -z "$restore_download_root" ]]; then
+      printf '%s\n' "${RED}.env must define MEDIA_ROOT and DOWNLOAD_ROOT.${RESET}" >&2
+      return
+    fi
+    if { [[ "$restore_media_root" == /mnt/nvme/* ]] ||
+         [[ "$restore_download_root" == /mnt/nvme/* ]]; } &&
+       ! mountpoint -q /mnt/nvme; then
+      printf '%s\n' "${RED}/mnt/nvme is configured but not mounted.${RESET}" >&2
+      return
+    fi
+  fi
+
   replace_flag=""
   if confirm "Replace existing application volumes?"; then
     printf '%s\n' "${RED}This overwrites current app configuration.${RESET}"

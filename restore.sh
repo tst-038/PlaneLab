@@ -44,11 +44,15 @@ if [[ ! -f .env ]]; then
     cat <<'EOF'
 Created .env from the backup, but restore has NOT started.
 
-Edit .env and set the Raspberry Pi storage paths:
-  MEDIA_ROOT=/mnt/nvme/media
-  DOWNLOAD_ROOT=/mnt/nvme/downloads
+Review MEDIA_ROOT and DOWNLOAD_ROOT in .env for this machine.
 
-Verify that /mnt/nvme is mounted, then run the same restore command again.
+Examples:
+  macOS:       MEDIA_ROOT=./data/media
+               DOWNLOAD_ROOT=./data/downloads
+  Raspberry Pi: MEDIA_ROOT=/mnt/nvme/media
+                DOWNLOAD_ROOT=/mnt/nvme/downloads
+
+Then run the same restore command again.
 EOF
     exit 2
   fi
@@ -59,29 +63,33 @@ fi
 
 media_root="$(sed -n 's/^MEDIA_ROOT=//p' .env | tail -n 1)"
 download_root="$(sed -n 's/^DOWNLOAD_ROOT=//p' .env | tail -n 1)"
-if [[ "$media_root" != /mnt/nvme/* || "$download_root" != /mnt/nvme/* ]]; then
-  cat >&2 <<EOF
-Error: restore on the Pi requires NVMe paths in .env.
-Current MEDIA_ROOT: ${media_root:-missing}
-Current DOWNLOAD_ROOT: ${download_root:-missing}
-
-Expected paths below /mnt/nvme to avoid writing media to the SD card.
-EOF
+if [[ -z "$media_root" || -z "$download_root" ]]; then
+  echo "Error: .env must define non-empty MEDIA_ROOT and DOWNLOAD_ROOT." >&2
   exit 1
 fi
 
-if ! mountpoint -q /mnt/nvme; then
+if { [[ "$media_root" == /mnt/nvme/* ]] ||
+     [[ "$download_root" == /mnt/nvme/* ]]; } &&
+   ! mountpoint -q /mnt/nvme; then
   echo "Error: /mnt/nvme is not a mounted filesystem." >&2
   exit 1
 fi
 
-sudo mkdir -p \
+storage_directories=(
   "$media_root/offline/movies" "$media_root/offline/shows" \
   "$media_root/gelato/movies" "$media_root/gelato/shows" \
   "$media_root/YouTube" \
   "$download_root/incomplete" \
   "$download_root/complete/radarr" "$download_root/complete/sonarr"
-sudo chown -R "$(id -u):$(id -g)" "$media_root" "$download_root"
+)
+if ! mkdir -p "${storage_directories[@]}" 2>/dev/null; then
+  if [[ "$(uname -s)" != "Linux" ]] || ! command -v sudo >/dev/null 2>&1; then
+    echo "Error: unable to create the configured storage directories." >&2
+    exit 1
+  fi
+  sudo mkdir -p "${storage_directories[@]}"
+  sudo chown -R "$(id -u):$(id -g)" "$media_root" "$download_root"
+fi
 
 echo "Stopping PlaneLab..."
 docker compose down

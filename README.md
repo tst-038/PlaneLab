@@ -336,9 +336,10 @@ Copy a timestamped backup directory into `backups/`, then run:
 ```
 
 If `.env` does not exist, restore copies it from the backup and stops so you
-can change the Mac paths to `/mnt/nvme/...`. Run the restore command again only
-after `/mnt/nvme` is mounted. The script refuses Pi restores using paths outside
-that mounted filesystem.
+can review `MEDIA_ROOT` and `DOWNLOAD_ROOT` for the current machine. Relative
+macOS paths such as `./data/media` are valid. When either configured path is
+under `/mnt/nvme`, restore additionally verifies that `/mnt/nvme` is mounted
+before creating directories or touching application volumes.
 
 Restore refuses non-empty volumes. To deliberately replace an existing
 installation:
