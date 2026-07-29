@@ -20,10 +20,6 @@ http:
       rule: Host(`prowlarr.planelab`)
       entryPoints: [web]
       service: prowlarr
-    nzbhydra2:
-      rule: Host(`hydra.planelab`)
-      entryPoints: [web]
-      service: nzbhydra2
     sabnzbd:
       rule: Host(`sabnzbd.planelab`)
       entryPoints: [web]
@@ -58,10 +54,6 @@ http:
       loadBalancer:
         servers:
           - url: http://prowlarr:9696
-    nzbhydra2:
-      loadBalancer:
-        servers:
-          - url: http://nzbhydra2:5076
     sabnzbd:
       loadBalancer:
         servers:

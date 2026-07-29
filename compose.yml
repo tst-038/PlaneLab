@@ -58,19 +58,19 @@ services:
     volumes:
       - prowlarr_config:/config
 
-  nzbhydra2:
-    image: lscr.io/linuxserver/nzbhydra2:latest
-    container_name: nzbhydra2
+  usenet-proxy:
+    build:
+      context: ./usenet-proxy
+    container_name: usenet-proxy
     restart: unless-stopped
-    ports:
-      - "5076:5076"
     environment:
-      PUID: ${PUID:-1000}
-      PGID: ${PGID:-1000}
-      TZ: ${TZ:-Europe/Brussels}
-    volumes:
-      - nzbhydra2_config:/config
-      - ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}:/downloads
+      UPSTREAM_URL: https://www.usenet-crawler.com/api
+      UPSTREAM_TIMEOUT: "30"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
 
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
@@ -185,9 +185,6 @@ volumes:
     external: true
   prowlarr_config:
     name: planelab_prowlarr_config
-    external: true
-  nzbhydra2_config:
-    name: planelab_nzbhydra2_config
     external: true
   sonarr_config:
     name: planelab_sonarr_config

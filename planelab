@@ -346,7 +346,6 @@ main_menu() {
         printf '  Sonarr    http://sonarr.planelab\n'
         printf '  Radarr    http://radarr.planelab\n'
         printf '  Prowlarr  http://prowlarr.planelab\n'
-        printf '  NZBHydra2 http://hydra.planelab\n'
         printf '  SABnzbd   http://sabnzbd.planelab\n'
         printf '  RDTClient http://rdtclient.planelab\n'
         printf '\n  Direct IP and port addresses remain available as fallback.\n'

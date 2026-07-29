@@ -6,7 +6,6 @@ VOLUMES=(
   planelab_jellyfin_cache
   planelab_seerr_config
   planelab_prowlarr_config
-  planelab_nzbhydra2_config
   planelab_sonarr_config
   planelab_radarr_config
   planelab_sabnzbd_config
