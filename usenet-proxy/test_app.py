@@ -13,7 +13,7 @@ class RewriteQueryTests(unittest.TestCase):
 
         self.assertTrue(changed)
         self.assertEqual(values["t"], ["search"])
-        self.assertEqual(values["q"], ["Example Show S12E08"])
+        self.assertEqual(values["q"], ["Example Show"])
         self.assertEqual(values["apikey"], ["secret"])
         self.assertNotIn("cat", values)
         self.assertNotIn("season", values)
@@ -25,7 +25,7 @@ class RewriteQueryTests(unittest.TestCase):
         )
 
         self.assertTrue(changed)
-        self.assertEqual(parse_qs(query)["q"], ["Example Show S03"])
+        self.assertEqual(parse_qs(query)["q"], ["Example Show"])
 
     def test_leaves_caps_and_downloads_untouched(self):
         for query in ("t=caps&apikey=secret", "t=get&id=123&apikey=secret"):

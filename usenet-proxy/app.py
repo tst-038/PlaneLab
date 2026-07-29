@@ -3,7 +3,6 @@
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
-import re
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, urlencode, urlsplit
 from urllib.request import Request, urlopen
@@ -38,15 +37,6 @@ def rewrite_query(raw_query: str) -> tuple[str, bool]:
         return raw_query, False
 
     query = values["q"].strip()
-    season = values.get("season", "").strip()
-    episode = values.get("ep", "").strip()
-
-    if season.isdigit():
-        token = f"S{int(season):02d}"
-        if episode.isdigit():
-            token += f"E{int(episode):02d}"
-        if token.lower() not in query.lower():
-            query = f"{query} {token}"
 
     discarded = {
         "cat",
@@ -105,6 +95,11 @@ class ProxyHandler(BaseHTTPRequestHandler):
                 self.send_header("X-PlaneLab-Rewritten", str(rewritten).lower())
                 self.end_headers()
                 self.wfile.write(body)
+                if rewritten:
+                    print(
+                        "Rewrote title-based tvsearch to category-free search",
+                        flush=True,
+                    )
         except HTTPError as error:
             body = error.read()
             self._respond(

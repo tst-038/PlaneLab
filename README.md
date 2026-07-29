@@ -53,10 +53,11 @@ title-based TV searches into general searches:
 Sonarr -> Prowlarr -> usenet-proxy -> UsenetCrawler -> SABnzbd
 ```
 
-The proxy removes the broken category filter and translates season/episode
-parameters into release-name tokens such as `S12E08`. Capability checks,
-downloads and API keys pass through unchanged. Request URLs are deliberately
-not logged because they contain the API key.
+The proxy removes the broken category, season and episode filters and sends
+only the series title as a general search. Sonarr then parses and filters the
+broad result set itself. Capability checks, downloads and API keys pass through
+unchanged. Request URLs are deliberately not logged because they contain the
+API key.
 
 Build and start it:
 
