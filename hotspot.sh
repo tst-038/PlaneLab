@@ -96,7 +96,7 @@ EOF
 
 install_local_dns() {
   local config_file hosts_file aliases
-  aliases="jellyfin.planelab seerr.planelab sonarr.planelab radarr.planelab prowlarr.planelab sabnzbd.planelab rdtclient.planelab youtarr.planelab"
+  aliases="jellyfin.planelab seerr.planelab sonarr.planelab radarr.planelab prowlarr.planelab hydra.planelab sabnzbd.planelab rdtclient.planelab youtarr.planelab"
   config_file="$(mktemp)"
   hosts_file="$(mktemp)"
 

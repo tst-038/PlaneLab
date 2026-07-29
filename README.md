@@ -35,6 +35,7 @@ point also works without the menu:
 | Sonarr | `http://sonarr.planelab` | TV management |
 | Radarr | `http://radarr.planelab` | Movie management |
 | Prowlarr | `http://prowlarr.planelab` | Indexer management |
+| NZBHydra2 | `http://hydra.planelab` | Usenet search aggregation |
 | SABnzbd | `http://sabnzbd.planelab` | TorBox News/Usenet client |
 | RDTClient | `http://rdtclient.planelab` | TorBox torrent adapter |
 | Youtarr | `http://youtarr.planelab` | YouTube library provisioning |
@@ -42,6 +43,42 @@ point also works without the menu:
 Traefik listens on port 80 and routes each local hostname to its service.
 NetworkManager's shared DNS advertises the names to hotspot and shared-Ethernet
 clients. The original IP-and-port URLs remain available for troubleshooting.
+
+## NZBHydra2 and UsenetCrawler
+
+Use one route per indexer to avoid duplicate releases and unnecessary API
+calls:
+
+- Sonarr/Radarr -> NZBHydra2 -> UsenetCrawler for Usenet
+- Sonarr/Radarr -> Prowlarr for torrent indexers
+- Sonarr/Radarr -> SABnzbd as the Usenet download client
+
+Start Hydra and open its setup page:
+
+```bash
+./prepare.sh
+docker compose up -d nzbhydra2
+```
+
+Open `http://hydra.planelab` (or `http://localhost:5076` on the Mac), then:
+
+1. In Hydra, add UsenetCrawler as a Newznab indexer using its base URL and a
+   newly generated API key. Run the capability and connection checks.
+2. In Hydra's searching settings, enable query/title fallback where available.
+   Search for the exact series and compare Hydra's result count with
+   UsenetCrawler's general search.
+3. Add Hydra to Sonarr under **Settings -> Indexers -> Add -> Newznab**. Use
+   `http://nzbhydra2:5076` as the URL and copy Hydra's API key.
+4. Keep the usual TV categories selected. Do not add UsenetCrawler to Sonarr a
+   second time through Prowlarr.
+5. In Prowlarr, keep UsenetCrawler only for manual diagnostics, or remove its
+   Sonarr/Radarr application sync. Continue syncing torrent indexers normally.
+
+Hydra cannot force an indexer to return results that its Newznab TV-search API
+does not expose. If Hydra still gets only the six `tvsearch` results while its
+general search gets 100, the reliable fix is a small query-rewrite proxy that
+changes UsenetCrawler's `tvsearch` request into a general `search`; Sonarr will
+then parse and reject unrelated releases itself.
 
 ## First start on macOS
 
@@ -241,6 +278,7 @@ Containers address one another by Compose service name:
 - `http://sonarr:8989`
 - `http://radarr:7878`
 - `http://prowlarr:9696`
+- `http://nzbhydra2:5076`
 - `http://sabnzbd:8080`
 - `http://rdtclient:6500`
 

@@ -58,6 +58,20 @@ services:
     volumes:
       - prowlarr_config:/config
 
+  nzbhydra2:
+    image: lscr.io/linuxserver/nzbhydra2:latest
+    container_name: nzbhydra2
+    restart: unless-stopped
+    ports:
+      - "5076:5076"
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Europe/Brussels}
+    volumes:
+      - nzbhydra2_config:/config
+      - ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}:/downloads
+
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
     container_name: sonarr
@@ -171,6 +185,9 @@ volumes:
     external: true
   prowlarr_config:
     name: planelab_prowlarr_config
+    external: true
+  nzbhydra2_config:
+    name: planelab_nzbhydra2_config
     external: true
   sonarr_config:
     name: planelab_sonarr_config
