@@ -32,15 +32,15 @@ STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
 BACKUP_DIR="$SCRIPT_DIR/backups/$STAMP"
 mkdir -p "$BACKUP_DIR"
 
-was_running=0
-if docker compose ps --status running --quiet | grep -q .; then
-  was_running=1
-fi
+running_services=()
+while IFS= read -r service_name; do
+  [[ -n "$service_name" ]] && running_services+=("$service_name")
+done < <(docker compose ps --status running --services)
 
 restart_stack() {
-  if [[ "$was_running" -eq 1 ]]; then
+  if [[ "${#running_services[@]}" -gt 0 ]]; then
     echo "Restarting PlaneLab..."
-    docker compose start >/dev/null
+    docker compose start "${running_services[@]}" >/dev/null
   fi
 }
 trap restart_stack EXIT INT TERM
@@ -63,6 +63,9 @@ for volume_name in "${VOLUMES[@]}"; do
 done
 
 cp compose.yml traefik.yml traefik-dynamic.yml "$BACKUP_DIR/"
+if [[ -f .planelab-mode ]]; then
+  cp .planelab-mode "$BACKUP_DIR/"
+fi
 if [[ -f .env ]]; then
   cp .env "$BACKUP_DIR/.env"
   chmod 600 "$BACKUP_DIR/.env"
@@ -70,6 +73,7 @@ fi
 
 printf '%s\n' \
   "Created: $STAMP" \
+  "PlaneLab mode: $([[ -f .planelab-mode ]] && cat .planelab-mode || echo 'not set')" \
   "Media and downloads are intentionally excluded." \
   "This backup contains secrets. Store it securely." \
   > "$BACKUP_DIR/README.txt"

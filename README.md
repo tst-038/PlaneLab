@@ -22,6 +22,7 @@ point also works without the menu:
 ./planelab setup
 ./planelab backup
 ./planelab update
+./planelab mode prepare
 ./planelab network uplink "WorkshopWiFi"
 ./planelab network ethernet shared
 ```
@@ -42,6 +43,59 @@ point also works without the menu:
 Traefik listens on port 80 and routes each local hostname to its service.
 NetworkManager's shared DNS advertises the names to hotspot and shared-Ethernet
 clients. The original IP-and-port URLs remain available for troubleshooting.
+
+## Home, preparation and travel modes
+
+PlaneLab keeps one complete set of application volumes and switches runtime
+behaviour without deleting containers or splitting backups:
+
+| Mode | Intended machine | Running services | Visible managed libraries |
+|---|---|---|---|
+| `home` | Home server | Jellyfin and Traefik | Gelato online movies/series |
+| `prepare` | Pi with internet | Full stack | Online and offline movies/series |
+| `travel` | Pi while travelling | Jellyfin and Traefik | Offline movies/series |
+
+Unmanaged Jellyfin libraries such as YouTube, music or photos remain visible in
+every mode. Modes change library access for existing Jellyfin users; they do
+not delete or recreate libraries. A comma-separated
+`JELLYFIN_EXCLUDED_USERS` value can exempt specific accounts.
+
+Create an API key under **Jellyfin Dashboard -> Advanced -> API Keys**, then
+configure it through **Operating mode -> Configure Jellyfin API key** in the
+TUI or place it in the private `.env`:
+
+```dotenv
+JELLYFIN_URL=http://localhost:8096
+JELLYFIN_API_KEY=your-generated-key
+JELLYFIN_EXCLUDED_USERS=
+PLANELAB_TRAVEL_HOTSPOT=auto
+```
+
+All four managed libraries must exist with these exact container paths before
+the first mode switch:
+
+```text
+/media/offline/movies
+/media/offline/shows
+/media/gelato/movies
+/media/gelato/shows
+```
+
+Switch from the TUI or command line:
+
+```bash
+./planelab mode home
+./planelab mode prepare
+./planelab mode travel
+./planelab mode status
+```
+
+Stopped background containers receive Docker restart policy `no`, so a daemon
+or machine reboot does not unexpectedly start download services in `home` or
+`travel`. `prepare` restores `unless-stopped` and starts the complete stack.
+With `PLANELAB_TRAVEL_HOTSPOT=auto`, travel mode activates an already installed
+hotspot on Linux when NetworkManager and `hotspot.env` are available. It never
+installs or replaces a hotspot automatically.
 
 ## UsenetCrawler search compatibility
 
@@ -325,7 +379,9 @@ Containers address one another by Compose service name:
 The script stops the stack briefly and stores consistent archives under a
 timestamped `backups/` directory. Media, downloads, and Jellyfin cache are
 excluded. The resulting backup contains credentials and must be stored
-securely outside Git.
+securely outside Git. Every application volume is included even when its
+container is stopped by the current mode. Backup records the current mode and
+restarts only the services that were running before the backup.
 
 ## Restore on a new machine
 
@@ -340,6 +396,27 @@ can review `MEDIA_ROOT` and `DOWNLOAD_ROOT` for the current machine. Relative
 macOS paths such as `./data/media` are valid. When either configured path is
 under `/mnt/nvme`, restore additionally verifies that `/mnt/nvme` is mounted
 before creating directories or touching application volumes.
+
+When the target already has `.env`, restore preserves its machine-specific
+paths, UID/GID and network settings. It imports the MariaDB, Youtarr and
+Jellyfin API credentials that belong to the restored volumes. If the backup
+contains a recorded PlaneLab mode, restore reapplies that mode instead of
+blindly starting every service.
+
+### Server-to-Pi handoff
+
+The home server never needs to download media:
+
+```text
+Home server: mode home -> backup
+Pi:          restore -> mode prepare -> download travel media -> mode travel
+Return:      Pi backup -> restore on server -> mode home
+```
+
+The configuration backup is complete, but media remains intentionally
+separate. Offline files must already be on the Pi NVMe or be transferred
+separately. Do not run both restored copies as independently changing masters;
+stop and back up the current machine before restoring onto the other one.
 
 Restore refuses non-empty volumes. To deliberately replace an existing
 installation:

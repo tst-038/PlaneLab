@@ -75,6 +75,48 @@ if { [[ "$media_root" == /mnt/nvme/* ]] ||
   exit 1
 fi
 
+env_value_from_file() {
+  local file key
+  file="$1"
+  key="$2"
+  sed -n "s/^$key=//p" "$file" | tail -n 1
+}
+
+set_env_value() {
+  local file key value temp_file
+  file="$1"
+  key="$2"
+  value="$3"
+  temp_file="$(mktemp)"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { found = 0 }
+    index($0, key "=") == 1 {
+      if (!found) print key "=" value
+      found = 1
+      next
+    }
+    { print }
+    END { if (!found) print key "=" value }
+  ' "$file" > "$temp_file"
+  mv "$temp_file" "$file"
+}
+
+if [[ -f "$BACKUP_DIR/.env" ]]; then
+  # These credentials belong to the restored application volumes. Paths,
+  # user/group IDs and network preferences deliberately remain machine-local.
+  for key in \
+    MARIADB_ROOT_PASSWORD \
+    YOUTARR_DB_PASSWORD \
+    JELLYFIN_API_KEY \
+    JELLYFIN_EXCLUDED_USERS; do
+    backup_value="$(env_value_from_file "$BACKUP_DIR/.env" "$key")"
+    if [[ -n "$backup_value" ]]; then
+      set_env_value .env "$key" "$backup_value"
+    fi
+  done
+  chmod 600 .env
+fi
+
 storage_directories=(
   "$media_root/offline/movies" "$media_root/offline/shows" \
   "$media_root/gelato/movies" "$media_root/gelato/shows" \
@@ -138,7 +180,17 @@ done
 "$SCRIPT_DIR/prepare.sh"
 
 echo "Starting PlaneLab..."
-docker compose up -d
+restored_mode=""
+if [[ -f "$BACKUP_DIR/.planelab-mode" ]]; then
+  restored_mode="$(tr -d '[:space:]' < "$BACKUP_DIR/.planelab-mode")"
+fi
+if [[ "$restored_mode" == "home" ||
+  "$restored_mode" == "prepare" ||
+  "$restored_mode" == "travel" ]]; then
+  "$SCRIPT_DIR/mode.sh" "$restored_mode"
+else
+  docker compose up -d
+fi
 docker compose ps
 
 echo
