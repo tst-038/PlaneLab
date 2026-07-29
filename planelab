@@ -188,25 +188,36 @@ setup_stack() {
     printf '%s\n' "${GREEN}Created private .env with random database passwords.${RESET}"
   fi
 
+  media_root="$(sed -n 's/^MEDIA_ROOT=//p' .env | tail -n 1)"
+  download_root="$(sed -n 's/^DOWNLOAD_ROOT=//p' .env | tail -n 1)"
+  if [[ -z "$media_root" || -z "$download_root" ]]; then
+    printf '%s\n' "${RED}.env must define MEDIA_ROOT and DOWNLOAD_ROOT.${RESET}" >&2
+    return 1
+  fi
+
   # Compose creates relative development paths itself. Pi storage is prepared
   # explicitly and only when its parent filesystem is actually mounted.
   if [[ "$(uname -s)" == "Linux" ]]; then
-    media_root="$(sed -n 's/^MEDIA_ROOT=//p' .env | tail -n 1)"
-    download_root="$(sed -n 's/^DOWNLOAD_ROOT=//p' .env | tail -n 1)"
     if [[ "$media_root" == /mnt/nvme/* || "$download_root" == /mnt/nvme/* ]]; then
       if ! mountpoint -q /mnt/nvme; then
         printf '%s\n' "${RED}/mnt/nvme is not mounted; refusing to start.${RESET}" >&2
         return 1
       fi
       sudo mkdir -p \
-        "$media_root/movies" "$media_root/shows" "$media_root/YouTube" \
+        "$media_root/downloads/movies" "$media_root/downloads/shows" \
+        "$media_root/gelato/movies" "$media_root/gelato/shows" \
+        "$media_root/YouTube" \
         "$download_root/incomplete" \
         "$download_root/complete/radarr" "$download_root/complete/sonarr"
       sudo chown -R "$(id -u):$(id -g)" "$media_root" "$download_root"
     fi
   else
-    mkdir -p data/media/{movies,shows,YouTube}
-    mkdir -p data/downloads/{incomplete,complete/{radarr,sonarr}}
+    mkdir -p \
+      "$media_root/downloads/movies" "$media_root/downloads/shows" \
+      "$media_root/gelato/movies" "$media_root/gelato/shows" \
+      "$media_root/YouTube" \
+      "$download_root/incomplete" \
+      "$download_root/complete/radarr" "$download_root/complete/sonarr"
   fi
 
   ./prepare.sh

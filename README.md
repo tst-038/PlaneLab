@@ -82,7 +82,7 @@ Do not keep the old direct entry enabled or every query will be sent twice.
 
 ```bash
 cp .env.example .env
-mkdir -p data/media/{movies,shows,YouTube}
+mkdir -p data/media/{downloads/{movies,shows},gelato/{movies,shows},YouTube}
 mkdir -p data/downloads/{incomplete,complete/{radarr,sonarr}}
 ./prepare.sh
 docker compose config
@@ -98,7 +98,7 @@ Engine and the Compose plugin, and mount the media SSD at `/mnt/nvme`.
 Create the storage directories:
 
 ```bash
-sudo mkdir -p /mnt/nvme/media/{movies,shows,YouTube}
+sudo mkdir -p /mnt/nvme/media/{downloads/{movies,shows},gelato/{movies,shows},YouTube}
 sudo mkdir -p /mnt/nvme/downloads/{incomplete,complete/{radarr,sonarr}}
 sudo chown -R 1000:1000 /mnt/nvme
 ```
@@ -258,8 +258,10 @@ mode to provide addresses to its Wi-Fi clients.
 
 Configure applications with container paths, never host paths:
 
-- Sonarr root folder: `/media/shows`
-- Radarr root folder: `/media/movies`
+- Sonarr root folder: `/media/downloads/shows`
+- Radarr root folder: `/media/downloads/movies`
+- Gelato movie base path: `/media/gelato/movies`
+- Gelato series base path: `/media/gelato/shows`
 - SABnzbd temporary folder: `/downloads/incomplete`
 - SABnzbd completed folder: `/downloads/complete`
 - RDTClient download and mapped paths: `/downloads`
@@ -269,6 +271,40 @@ Youtarr's `YOUTUBE_OUTPUT_DIR` variable is informational and represents the
 host directory. Its actual in-container download directory is `DATA_PATH`,
 which defaults to `/usr/src/app/data`. The Compose file therefore mounts
 `${MEDIA_ROOT}/YouTube` at `/usr/src/app/data`.
+
+### Offline and Gelato libraries
+
+Keep downloaded files and Gelato catalog entries in separate trees:
+
+```text
+/media
+├── downloads
+│   ├── movies
+│   └── shows
+├── gelato
+│   ├── movies
+│   └── shows
+└── YouTube
+```
+
+Create four dedicated Jellyfin libraries:
+
+| Jellyfin library | Type | Only path |
+|---|---|---|
+| `✈️ Films gedownload` | Movies | `/media/downloads/movies` |
+| `✈️ Series gedownload` | Shows | `/media/downloads/shows` |
+| `🌐 Films online` | Movies | `/media/gelato/movies` |
+| `🌐 Series online` | Shows | `/media/gelato/shows` |
+
+Configure Gelato to import movies and series only into its two
+`/media/gelato/...` paths. Never add a Gelato path to either downloaded
+library. Jellyfin's global search and continue-watching views can still include
+online entries because those views span libraries.
+
+For an existing installation, create the new directories first, move existing
+movie and series files into the corresponding `/media/downloads/...`
+directories, then update the root folders in Radarr and Sonarr. Do not leave
+the old `/media/movies` or `/media/shows` roots configured after migration.
 
 Containers address one another by Compose service name:
 
@@ -330,8 +366,9 @@ Do not commit `.env`, `backups/`, media, downloads, API keys, or passwords.
 docker compose config
 docker compose ps
 docker compose logs --tail=100
-docker compose exec sonarr ls -la /media/shows
-docker compose exec radarr ls -la /media/movies
+docker compose exec sonarr ls -la /media/downloads/shows
+docker compose exec radarr ls -la /media/downloads/movies
+docker compose exec jellyfin ls -la /media/gelato
 docker compose exec sabnzbd ls -la /downloads
 ```
 

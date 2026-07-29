@@ -75,6 +75,14 @@ if ! mountpoint -q /mnt/nvme; then
   exit 1
 fi
 
+sudo mkdir -p \
+  "$media_root/downloads/movies" "$media_root/downloads/shows" \
+  "$media_root/gelato/movies" "$media_root/gelato/shows" \
+  "$media_root/YouTube" \
+  "$download_root/incomplete" \
+  "$download_root/complete/radarr" "$download_root/complete/sonarr"
+sudo chown -R "$(id -u):$(id -g)" "$media_root" "$download_root"
+
 echo "Stopping PlaneLab..."
 docker compose down
 
