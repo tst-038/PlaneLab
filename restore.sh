@@ -76,7 +76,7 @@ if ! mountpoint -q /mnt/nvme; then
 fi
 
 sudo mkdir -p \
-  "$media_root/downloads/movies" "$media_root/downloads/shows" \
+  "$media_root/offline/movies" "$media_root/offline/shows" \
   "$media_root/gelato/movies" "$media_root/gelato/shows" \
   "$media_root/YouTube" \
   "$download_root/incomplete" \
