@@ -150,6 +150,14 @@ mode_state() {
   fi
 }
 
+hardware_state() {
+  if [[ -x "$SCRIPT_DIR/hardware-transcoding.sh" ]]; then
+    "$SCRIPT_DIR/hardware-transcoding.sh" status 2>/dev/null
+  else
+    printf 'not configured'
+  fi
+}
+
 random_secret() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -hex 24
@@ -161,7 +169,7 @@ random_secret() {
 setup_stack() {
   local media_default downloads_default media_root download_root
   local existing_root_password existing_youtarr_password existing_jellyfin_key
-  local existing_excluded_users existing_travel_hotspot
+  local existing_excluded_users existing_travel_hotspot existing_hardware
   require_docker || return
 
   existing_root_password=""
@@ -169,6 +177,7 @@ setup_stack() {
   existing_jellyfin_key=""
   existing_excluded_users=""
   existing_travel_hotspot=""
+  existing_hardware=""
   if [[ -f .env ]]; then
     existing_root_password="$(
       sed -n 's/^MARIADB_ROOT_PASSWORD=//p' .env | tail -n 1
@@ -184,6 +193,9 @@ setup_stack() {
     )"
     existing_travel_hotspot="$(
       sed -n 's/^PLANELAB_TRAVEL_HOTSPOT=//p' .env | tail -n 1
+    )"
+    existing_hardware="$(
+      sed -n 's/^PLANELAB_HARDWARE_TRANSCODING=//p' .env | tail -n 1
     )"
   fi
 
@@ -214,6 +226,7 @@ setup_stack() {
       printf 'PGID=%s\n\n' "$(id -g)"
       printf 'MEDIA_ROOT=%s\n' "$media_root"
       printf 'DOWNLOAD_ROOT=%s\n\n' "$download_root"
+      printf 'COMPOSE_FILE=compose.yml:compose.hardware.yml\n'
       printf 'MARIADB_ROOT_PASSWORD=%s\n' \
         "${existing_root_password:-$(random_secret)}"
       printf 'YOUTARR_DB_PASSWORD=%s\n' \
@@ -223,6 +236,8 @@ setup_stack() {
       printf 'JELLYFIN_EXCLUDED_USERS=%s\n' "$existing_excluded_users"
       printf 'PLANELAB_TRAVEL_HOTSPOT=%s\n' \
         "${existing_travel_hotspot:-auto}"
+      printf 'PLANELAB_HARDWARE_TRANSCODING=%s\n' \
+        "${existing_hardware:-auto}"
     } > .env
     chmod 600 .env
     printf '%s\n' "${GREEN}Created private .env with random database passwords.${RESET}"
@@ -261,11 +276,15 @@ setup_stack() {
   fi
 
   ./prepare.sh
+  "$SCRIPT_DIR/hardware-transcoding.sh" configure
   docker compose config --quiet
   docker compose pull
   case "$(mode_state)" in
     home|prepare|travel) "$SCRIPT_DIR/mode.sh" "$(mode_state)" ;;
-    *) docker compose up -d ;;
+    *)
+      docker compose up -d
+      "$SCRIPT_DIR/hardware-transcoding.sh" apply
+      ;;
   esac
   docker compose ps
 }
@@ -336,9 +355,13 @@ start_stack() {
   require_docker && require_config || return
   current_mode="$(mode_state)"
   ./prepare.sh
+  "$SCRIPT_DIR/hardware-transcoding.sh" configure
   case "$current_mode" in
     home|prepare|travel) "$SCRIPT_DIR/mode.sh" "$current_mode" ;;
-    *) docker compose up -d ;;
+    *)
+      docker compose up -d
+      "$SCRIPT_DIR/hardware-transcoding.sh" apply
+      ;;
   esac
 }
 
@@ -481,6 +504,7 @@ main_menu() {
     title
     printf '  Stack:   %s\n' "$(stack_state)"
     printf '  Mode:    %s\n' "$(mode_state)"
+    printf '  H/W:     %s\n' "$(hardware_state)"
     printf '  Hotspot: %s\n\n' "$(hotspot_state)"
     arrow_menu \
       "First setup / reconfigure" \
@@ -529,6 +553,7 @@ case "${1:-tui}" in
   restore) shift; ./restore.sh "$@" ;;
   network) shift; ./hotspot.sh "$@" ;;
   mode) shift; ./mode.sh "$@" ;;
+  hardware) shift; ./hardware-transcoding.sh "$@" ;;
   help|-h|--help)
     cat <<'EOF'
 Usage: ./planelab [command]
@@ -541,6 +566,7 @@ Commands:
   restore [--replace] <backup-directory>
   network <hotspot-command>
   mode <home|prepare|travel|status>
+  hardware <configure|apply|status>
 EOF
     ;;
   *)

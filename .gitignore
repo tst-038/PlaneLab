@@ -2,6 +2,8 @@
 .env
 hotspot.env
 .planelab-mode
+.planelab-hardware
+compose.hardware.yml
 backups/
 data/
 *.log

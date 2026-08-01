@@ -14,6 +14,8 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
+"$SCRIPT_DIR/hardware-transcoding.sh" configure >/dev/null
+
 VOLUMES=(
   planelab_jellyfin_config
   planelab_seerr_config

@@ -119,12 +119,14 @@ case "$mode" in
 esac
 
 require_runtime
+"$SCRIPT_DIR/hardware-transcoding.sh" configure
 "$SCRIPT_DIR/prepare.sh" >/dev/null
 
 case "$mode" in
   home)
     docker compose up -d "${CORE_SERVICES[@]}"
     apply_jellyfin_mode home
+    "$SCRIPT_DIR/hardware-transcoding.sh" apply
     set_restart_policy no "${BACKGROUND_SERVICES[@]}"
     docker compose stop "${BACKGROUND_SERVICES[@]}"
     set_restart_policy unless-stopped "${CORE_SERVICES[@]}"
@@ -133,10 +135,12 @@ case "$mode" in
     docker compose up -d "${PREPARATION_SERVICES[@]}"
     set_restart_policy unless-stopped "${MANAGED_SERVICES[@]}"
     apply_jellyfin_mode prepare
+    "$SCRIPT_DIR/hardware-transcoding.sh" apply
     ;;
   travel)
     docker compose up -d "${CORE_SERVICES[@]}"
     apply_jellyfin_mode travel
+    "$SCRIPT_DIR/hardware-transcoding.sh" apply
     set_restart_policy no "${BACKGROUND_SERVICES[@]}"
     docker compose stop "${BACKGROUND_SERVICES[@]}"
     set_restart_policy unless-stopped "${CORE_SERVICES[@]}"

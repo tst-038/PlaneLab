@@ -117,6 +117,8 @@ if [[ -f "$BACKUP_DIR/.env" ]]; then
   chmod 600 .env
 fi
 
+"$SCRIPT_DIR/hardware-transcoding.sh" configure
+
 storage_directories=(
   "$media_root/offline/movies" "$media_root/offline/shows" \
   "$media_root/gelato/movies" "$media_root/gelato/shows" \

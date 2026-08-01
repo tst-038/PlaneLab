@@ -105,6 +105,49 @@ With `PLANELAB_TRAVEL_HOTSPOT=auto`, travel mode activates an already installed
 hotspot on Linux when NetworkManager and `hotspot.env` are available. It never
 installs or replaces a hotspot automatically.
 
+## Automatic hardware transcoding
+
+PlaneLab detects transcoding support per host whenever setup, restore, start or
+a mode switch runs:
+
+- non-Pi Linux with an Intel DRI render device: QSV enabled;
+- non-Pi Linux with an AMD DRI render device: VA-API enabled;
+- macOS Docker: disabled;
+- Raspberry Pi: disabled;
+- missing/unsupported DRI device, including NVIDIA without its separate
+  container-toolkit setup: disabled.
+
+Detection generates the machine-local `compose.hardware.yml`, passes the render
+device and its supplemental groups into the official Jellyfin container, then
+updates Jellyfin's encoding configuration through the API. On a Pi or Mac it
+actively sets Jellyfin hardware acceleration to `none`, which makes a restored
+server backup safe to use there. The generated override is never backed up;
+every target detects its own hardware after restore.
+
+The default is:
+
+```dotenv
+COMPOSE_FILE=compose.yml:compose.hardware.yml
+PLANELAB_HARDWARE_TRANSCODING=auto
+```
+
+Set the latter to `off` to force software transcoding. Inspect or rerun
+detection with:
+
+```bash
+./planelab hardware status
+./planelab hardware configure
+./planelab hardware apply
+```
+
+PlaneLab preserves unrelated Jellyfin encoding settings and does not blindly
+enable codecs the GPU may not support. Jellyfin recommends exposing the Linux
+DRI render device and its render group to the container for Intel/AMD hardware
+acceleration. See the official [Intel](https://jellyfin.org/docs/general/post-install/transcoding/hardware-acceleration/intel/)
+and [AMD](https://jellyfin.org/docs/general/post-install/transcoding/hardware-acceleration/amd/)
+guides. Jellyfin currently discourages Raspberry Pi hardware for this workload;
+see [hardware selection](https://jellyfin.org/docs/general/administration/hardware-selection/).
+
 ## UsenetCrawler search compatibility
 
 UsenetCrawler's general `search` returns releases that its structured
@@ -440,7 +483,10 @@ It never touches media or download directories.
 
 ```bash
 git init
-git add compose.yml traefik.yml traefik-dynamic.yml .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh hotspot.sh ethernet-watch.sh planelab README.md
+git add compose.yml traefik.yml traefik-dynamic.yml library-modes.json \
+  .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh \
+  hotspot.sh ethernet-watch.sh mode.sh hardware-transcoding.sh \
+  hardware-transcoding.py jellyfin-library-mode.py planelab README.md
 git commit -m "Initial PlaneLab stack"
 ```
 
