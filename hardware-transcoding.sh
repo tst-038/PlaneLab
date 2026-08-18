@@ -70,12 +70,16 @@ detect_backend() {
 }
 
 configure_host() {
-  local preference render_device render_gid video_gid backend
+  local preference render_device render_gid video_gid backend compose_files
   if [[ ! -f .env ]]; then
     echo "Error: .env is missing." >&2
     return 1
   fi
-  set_env_value COMPOSE_FILE "compose.yml:compose.hardware.yml"
+  compose_files="compose.yml:compose.hardware.yml"
+  if [[ "$(uname -s)" == "Linux" && -f "$SCRIPT_DIR/compose.tailscale.yml" ]]; then
+    compose_files+=":compose.tailscale.yml"
+  fi
+  set_env_value COMPOSE_FILE "$compose_files"
   preference="$(env_value PLANELAB_HARDWARE_TRANSCODING)"
   preference="${preference:-auto}"
   case "$preference" in

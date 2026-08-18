@@ -226,7 +226,11 @@ setup_stack() {
       printf 'PGID=%s\n\n' "$(id -g)"
       printf 'MEDIA_ROOT=%s\n' "$media_root"
       printf 'DOWNLOAD_ROOT=%s\n\n' "$download_root"
-      printf 'COMPOSE_FILE=compose.yml:compose.hardware.yml\n'
+      if [[ "$(uname -s)" == "Linux" && -f compose.tailscale.yml ]]; then
+        printf 'COMPOSE_FILE=compose.yml:compose.hardware.yml:compose.tailscale.yml\n'
+      else
+        printf 'COMPOSE_FILE=compose.yml:compose.hardware.yml\n'
+      fi
       printf 'MARIADB_ROOT_PASSWORD=%s\n' \
         "${existing_root_password:-$(random_secret)}"
       printf 'YOUTARR_DB_PASSWORD=%s\n' \
