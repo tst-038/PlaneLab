@@ -1,0 +1,10 @@
+{
+  "version": "0.0.1",
+  "services": {
+    "svc:jellyfin": {
+      "endpoints": {
+        "tcp:8096": "tcp://127.0.0.1:8096"
+      }
+    }
+  }
+}

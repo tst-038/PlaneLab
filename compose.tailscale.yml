@@ -14,10 +14,14 @@ services:
       TS_AUTHKEY: ${TAILSCALE_AUTHKEY:-}
       TS_AUTH_ONCE: "true"
       TS_HOSTNAME: ${TAILSCALE_HOSTNAME:-planelab}
+      TS_SERVE_CONFIG: /config/serve.json
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "false"
+      TS_EXPERIMENTAL_SERVICE_AUTO_ADVERTISEMENT: "true"
     volumes:
       - tailscale_state:/var/lib/tailscale
+      # Mount the directory so containerboot can watch Serve config updates.
+      - ./tailscale:/config:ro
 
 volumes:
   tailscale_state:

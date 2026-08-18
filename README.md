@@ -69,6 +69,15 @@ docker compose up -d tailscale
 docker compose exec tailscale tailscale status
 ```
 
+PlaneLab also configures the node as a host for the Tailscale Service
+`svc:jellyfin`, forwarding its stable `tcp:8096` endpoint to the local
+Jellyfin instance. Create that Service with endpoint `tcp:8096` on the
+Tailscale Services page. The PlaneLab node must have a tag-based identity
+(for example `tag:media-server`); apply that tag on the Machines page or use a
+tagged auth key. Approve PlaneLab under the Service's pending hosts after its
+first start. The mounted `tailscale/serve.json` is automatically applied and
+advertised again after container restarts.
+
 With MagicDNS enabled, use the machine name and the existing service ports:
 
 | Service | Tailnet URL |
