@@ -370,8 +370,10 @@ start_stack() {
 }
 
 restart_running_services() {
-  local running_services service_name
+  local current_mode running_services service_name
   require_docker && require_config || return
+  "$SCRIPT_DIR/hardware-transcoding.sh" configure
+  current_mode="$(mode_state)"
   running_services=()
   while IFS= read -r service_name; do
     [[ -n "$service_name" ]] && running_services+=("$service_name")
@@ -381,6 +383,12 @@ restart_running_services() {
     return
   fi
   docker compose restart "${running_services[@]}"
+  # Reapply the selected mode after restarting. This starts any required core
+  # service that was missing or stopped, including the optional Tailscale node.
+  case "$current_mode" in
+    home|prepare|travel) "$SCRIPT_DIR/mode.sh" "$current_mode" ;;
+    *) docker compose up -d ;;
+  esac
 }
 
 update_stack() {

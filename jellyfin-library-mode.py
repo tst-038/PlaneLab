@@ -139,7 +139,13 @@ def wait_for_jellyfin(client: JellyfinClient, seconds: int) -> None:
         try:
             client.request("GET", "/System/Info/Public")
             return
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as error:
+        except (
+            HTTPError,
+            URLError,
+            TimeoutError,
+            OSError,
+            json.JSONDecodeError,
+        ) as error:
             last_error = error
             time.sleep(2)
     raise RuntimeError(f"Jellyfin did not become ready: {last_error}")

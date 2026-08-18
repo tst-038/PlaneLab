@@ -1,6 +1,8 @@
 import importlib.util
+from http.client import RemoteDisconnected
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 
 MODULE_PATH = Path(__file__).with_name("jellyfin-library-mode.py")
@@ -165,6 +167,22 @@ class LibraryModeTests(unittest.TestCase):
             policy["EnabledFolders"], ["music", "off-m", "off-s", "youtube"]
         )
         self.assertNotIn("/Users/2/Policy", client.updates)
+
+    def test_wait_retries_remote_disconnect(self):
+        class FlakyClient:
+            def __init__(self):
+                self.attempts = 0
+
+            def request(self, method, path):
+                self.attempts += 1
+                if self.attempts == 1:
+                    raise RemoteDisconnected("server restarted")
+                return {}
+
+        client = FlakyClient()
+        with patch.object(module.time, "sleep"):
+            module.wait_for_jellyfin(client, 1)
+        self.assertEqual(client.attempts, 2)
 
 
 if __name__ == "__main__":
