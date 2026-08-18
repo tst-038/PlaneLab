@@ -14,6 +14,7 @@ VOLUMES=(
   planelab_youtarr_config
   planelab_youtarr_images
   planelab_youtarr_jobs
+  planelab_tailscale_state
 )
 
 for volume_name in "${VOLUMES[@]}"; do

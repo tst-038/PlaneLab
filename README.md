@@ -44,6 +44,56 @@ Traefik listens on port 80 and routes each local hostname to its service.
 NetworkManager's shared DNS advertises the names to hotspot and shared-Ethernet
 clients. The original IP-and-port URLs remain available for troubleshooting.
 
+## Remote access with Tailscale
+
+On Raspberry Pi/Linux, PlaneLab can run Tailscale in Docker's host network
+namespace. The Pi gets a private tailnet address and every published web UI is
+reachable by authorized tailnet devices without exposing it to the public
+internet.
+
+Create a one-off auth key in the Tailscale admin console (pre-authorized if
+your tailnet uses device approval), then
+configure the Pi's private `.env`:
+
+```dotenv
+COMPOSE_FILE=compose.yml:compose.hardware.yml:compose.tailscale.yml
+TAILSCALE_HOSTNAME=planelab
+TAILSCALE_AUTHKEY=tskey-auth-...
+```
+
+Start and verify it:
+
+```bash
+./prepare.sh
+docker compose up -d tailscale
+docker compose exec tailscale tailscale status
+```
+
+With MagicDNS enabled, use the machine name and the existing service ports:
+
+| Service | Tailnet URL |
+|---|---:|
+| Jellyfin | `http://planelab:8096` |
+| Seerr | `http://planelab:5055` |
+| Sonarr | `http://planelab:8989` |
+| Radarr | `http://planelab:7878` |
+| Prowlarr | `http://planelab:9696` |
+| SABnzbd | `http://planelab:8080` |
+| RDTClient | `http://planelab:6500` |
+| Youtarr | `http://planelab:3087` |
+
+If MagicDNS is disabled, replace `planelab` with the `100.x.y.z` address from
+`docker compose exec tailscale tailscale ip -4`. The identity is stored in the
+external `planelab_tailscale_state` volume, so the auth key can be cleared
+after the first successful login. Tailscale stays running in every PlaneLab
+mode. Its machine identity is deliberately excluded from transferable backups
+to prevent two restored hosts from claiming the same tailnet node; enroll a
+restored machine with its own auth key.
+
+The override requires Linux, `/dev/net/tun`, and host networking. On macOS,
+leave it out of `COMPOSE_FILE` and use the native Tailscale app; the same host
+ports are reachable through the Mac's tailnet address.
+
 ## Home, preparation and travel modes
 
 PlaneLab keeps one complete set of application volumes and switches runtime
@@ -213,6 +263,9 @@ Copy `.env.example` to `.env` and use:
 ```dotenv
 MEDIA_ROOT=/mnt/nvme/media
 DOWNLOAD_ROOT=/mnt/nvme/downloads
+COMPOSE_FILE=compose.yml:compose.hardware.yml:compose.tailscale.yml
+TAILSCALE_HOSTNAME=planelab
+TAILSCALE_AUTHKEY=tskey-auth-...
 ```
 
 Never start the stack until `/mnt/nvme` is mounted. Otherwise Docker may create
@@ -483,7 +536,7 @@ It never touches media or download directories.
 
 ```bash
 git init
-git add compose.yml traefik.yml traefik-dynamic.yml library-modes.json \
+git add compose.yml compose.tailscale.yml traefik.yml traefik-dynamic.yml library-modes.json \
   .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh \
   hotspot.sh ethernet-watch.sh mode.sh hardware-transcoding.sh \
   hardware-transcoding.py jellyfin-library-mode.py planelab README.md

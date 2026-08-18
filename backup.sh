@@ -64,7 +64,8 @@ for volume_name in "${VOLUMES[@]}"; do
     tar -czf "/backup/$volume_name.tar.gz" -C /source .
 done
 
-cp compose.yml traefik.yml traefik-dynamic.yml library-modes.json "$BACKUP_DIR/"
+cp compose.yml compose.tailscale.yml traefik.yml traefik-dynamic.yml \
+  library-modes.json "$BACKUP_DIR/"
 if [[ -f .planelab-mode ]]; then
   cp .planelab-mode "$BACKUP_DIR/"
 fi
@@ -77,6 +78,7 @@ printf '%s\n' \
   "Created: $STAMP" \
   "PlaneLab mode: $([[ -f .planelab-mode ]] && cat .planelab-mode || echo 'not set')" \
   "Media and downloads are intentionally excluded." \
+  "The machine-specific Tailscale identity is intentionally excluded." \
   "This backup contains secrets. Store it securely." \
   > "$BACKUP_DIR/README.txt"
 

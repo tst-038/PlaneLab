@@ -122,6 +122,13 @@ require_runtime
 "$SCRIPT_DIR/hardware-transcoding.sh" configure
 "$SCRIPT_DIR/prepare.sh" >/dev/null
 
+# Keep the optional Linux Tailscale node alive in every operating mode.
+if docker compose config --services | grep -qx tailscale; then
+  CORE_SERVICES+=(tailscale)
+  MANAGED_SERVICES+=(tailscale)
+  PREPARATION_SERVICES+=(tailscale)
+fi
+
 case "$mode" in
   home)
     docker compose up -d "${CORE_SERVICES[@]}"
