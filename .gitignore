@@ -14,3 +14,5 @@ data/
 *.tgz
 *.zst
 *.age
+__pycache__/
+*.pyc

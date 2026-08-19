@@ -71,6 +71,26 @@ activate_hotspot_for_travel() {
   fi
 }
 
+apply_remux_mode() {
+  local mode api_key remux_url local_kinds
+  mode="$1"
+  api_key="$(env_value REMUX_API_KEY)"
+  if [[ -z "$api_key" || "$api_key" == "replace-with-remux-api-key" ]]; then
+    echo "Warning: REMUX_API_KEY is not configured; catalog visibility was not changed." >&2
+    return 0
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "Error: python3 is required for Remux catalog switching." >&2
+    return 1
+  fi
+  remux_url="$(env_value REMUX_URL)"
+  local_kinds="$(env_value REMUX_LOCAL_ADDON_KINDS)"
+  REMUX_API_KEY="$api_key" \
+    REMUX_URL="${remux_url:-http://localhost:8096}" \
+    REMUX_LOCAL_ADDON_KINDS="${local_kinds:-opendal-local}" \
+    python3 "$SCRIPT_DIR/remux-library-mode.py" "$mode"
+}
+
 remove_legacy_jellyfin() {
   if docker inspect jellyfin >/dev/null 2>&1; then
     echo "Removing the legacy Jellyfin container; its volumes are preserved."
@@ -116,6 +136,7 @@ fi
 case "$mode" in
   home)
     docker compose up -d "${CORE_SERVICES[@]}"
+    apply_remux_mode home
     set_restart_policy no "${BACKGROUND_SERVICES[@]}"
     docker compose stop "${BACKGROUND_SERVICES[@]}"
     set_restart_policy unless-stopped "${CORE_SERVICES[@]}"
@@ -123,9 +144,11 @@ case "$mode" in
   prepare)
     docker compose up -d "${PREPARATION_SERVICES[@]}"
     set_restart_policy unless-stopped "${MANAGED_SERVICES[@]}"
+    apply_remux_mode prepare
     ;;
   travel)
     docker compose up -d "${CORE_SERVICES[@]}"
+    apply_remux_mode travel
     set_restart_policy no "${BACKGROUND_SERVICES[@]}"
     docker compose stop "${BACKGROUND_SERVICES[@]}"
     set_restart_policy unless-stopped "${CORE_SERVICES[@]}"

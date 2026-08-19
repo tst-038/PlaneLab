@@ -111,13 +111,14 @@ Configure Stremio add-ons and online catalogs in Remux itself. Remux handles
 its own streaming and transcoding choices; PlaneLab no longer writes encoding
 settings through an API.
 
-PlaneLab modes now control which containers run:
+PlaneLab modes control which containers run and apply a catalog filter to
+every Remux user:
 
-| Mode | Running services |
-|---|---|
-| `home` | Remux, Traefik, and optional Tailscale |
-| `prepare` | Full stack, including download and request services |
-| `travel` | Remux, Traefik, optional Tailscale, and the configured hotspot |
+| Mode | Running services | Visible Remux catalogs |
+|---|---|---|
+| `home` | Remux, Traefik, and optional Tailscale | Online/non-local catalogs |
+| `prepare` | Full stack, including download and request services | All catalogs |
+| `travel` | Remux, Traefik, optional Tailscale, and the configured hotspot | Local catalogs |
 
 ```bash
 ./planelab mode home
@@ -126,11 +127,26 @@ PlaneLab modes now control which containers run:
 ./planelab mode status
 ```
 
-The old path-based Jellyfin library visibility mechanism has been removed.
-Remux currently accepts Jellyfin-compatible `EnabledFolders` fields without
-enforcing them, so PlaneLab cannot safely hide individual Remux catalogs by
-mode. Configure each user's catalog filters in Remux. Local sources remain
-playable offline; online sources naturally require an uplink.
+Create a key under **Remux Dashboard -> API Keys**, then enter it through
+**Operating mode -> Configure Remux API key** or add it to `.env`:
+
+```dotenv
+REMUX_URL=http://localhost:8096
+REMUX_API_KEY=your-generated-key
+REMUX_LOCAL_ADDON_KINDS=opendal-local
+```
+
+PlaneLab discovers enabled catalogs, treats Remux's `opendal-local` addon as
+offline/local, and writes a native `catalog not_in` rule to each user's
+`Policy.FilterRules`. Remux applies that rule to content queries and omits
+catalog containers that become empty. `REMUX_LOCAL_ADDON_KINDS` can contain a
+comma-separated list if another addon kind should count as local.
+
+PlaneLab owns catalog-type rules for these users: it replaces existing catalog
+rules on each mode switch while preserving non-catalog rules such as genre or
+parental filters. It refuses an existing top-level `any` filter when safely
+combining it is impossible. If one user update fails, already updated users are
+rolled back to their original policies.
 
 Background containers receive restart policy `no` in `home` and `travel`, so
 a Docker or machine restart does not bring download services back. `prepare`
@@ -155,7 +171,8 @@ changes.
 ./planelab gpu configure
 ```
 
-There is no encoder setter or Jellyfin API key anymore.
+There is no encoder setter. The Remux API key is used only for per-user catalog
+visibility during mode changes.
 
 ## Remote access with Tailscale
 

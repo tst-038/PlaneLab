@@ -175,12 +175,13 @@ random_secret() {
 
 setup_stack() {
   local media_default downloads_default media_root download_root
-  local existing_root_password existing_youtarr_password
+  local existing_root_password existing_youtarr_password existing_remux_key
   local existing_travel_hotspot existing_gpu
   require_docker || return
 
   existing_root_password=""
   existing_youtarr_password=""
+  existing_remux_key=""
   existing_travel_hotspot=""
   existing_gpu=""
   if [[ -f .env ]]; then
@@ -189,6 +190,9 @@ setup_stack() {
     )"
     existing_youtarr_password="$(
       sed -n 's/^YOUTARR_DB_PASSWORD=//p' .env | tail -n 1
+    )"
+    existing_remux_key="$(
+      sed -n 's/^REMUX_API_KEY=//p' .env | tail -n 1
     )"
     existing_travel_hotspot="$(
       sed -n 's/^PLANELAB_TRAVEL_HOTSPOT=//p' .env | tail -n 1
@@ -237,6 +241,9 @@ setup_stack() {
         "${existing_root_password:-$(random_secret)}"
       printf 'YOUTARR_DB_PASSWORD=%s\n' \
         "${existing_youtarr_password:-$(random_secret)}"
+      printf 'REMUX_URL=http://localhost:8096\n'
+      printf 'REMUX_API_KEY=%s\n' "$existing_remux_key"
+      printf 'REMUX_LOCAL_ADDON_KINDS=opendal-local\n'
       printf 'PLANELAB_TRAVEL_HOTSPOT=%s\n' \
         "${existing_travel_hotspot:-auto}"
       printf 'PLANELAB_GPU_PASSTHROUGH=%s\n' "${existing_gpu:-auto}"
@@ -289,6 +296,47 @@ setup_stack() {
   docker compose ps
 }
 
+set_env_value() {
+  local key value temp_file
+  key="$1"
+  value="$2"
+  if [[ "$value" == *$'\n'* ]]; then
+    printf '%s\n' "${RED}Values may not contain newlines.${RESET}" >&2
+    return 1
+  fi
+  temp_file="$(mktemp)"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { found = 0 }
+    index($0, key "=") == 1 {
+      if (!found) print key "=" value
+      found = 1
+      next
+    }
+    { print }
+    END { if (!found) print key "=" value }
+  ' .env > "$temp_file"
+  mv "$temp_file" .env
+  chmod 600 .env
+}
+
+configure_remux_api() {
+  local api_key
+  require_config || return
+  printf '%s\n' \
+    "Create an API key in Remux:" \
+    "Dashboard -> API Keys -> New API Key -> PlaneLab"
+  read -r -s -p "Remux API key: " api_key
+  printf '\n'
+  if [[ -z "$api_key" ]]; then
+    printf '%s\n' "${YELLOW}API key was not changed.${RESET}"
+    return
+  fi
+  set_env_value REMUX_URL "http://localhost:8096"
+  set_env_value REMUX_API_KEY "$api_key"
+  unset api_key
+  printf '%s\n' "${GREEN}Remux API key saved in private .env.${RESET}"
+}
+
 mode_menu() {
   while true; do
     title
@@ -297,11 +345,13 @@ mode_menu() {
     arrow_menu \
       "Home — Remux playback only" \
       "Prepare — download on the Pi" \
-      "Travel — Remux playback and hotspot"
+      "Travel — Remux playback and hotspot" \
+      "Configure Remux API key"
     case "$MENU_CHOICE" in
       0) title; "$SCRIPT_DIR/mode.sh" home || true; pause ;;
       1) title; "$SCRIPT_DIR/mode.sh" prepare || true; pause ;;
       2) title; "$SCRIPT_DIR/mode.sh" travel || true; pause ;;
+      3) title; configure_remux_api; pause ;;
       -1) return ;;
     esac
   done

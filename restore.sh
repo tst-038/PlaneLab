@@ -106,7 +106,8 @@ if [[ -f "$BACKUP_DIR/.env" ]]; then
   # user/group IDs and network preferences deliberately remain machine-local.
   for key in \
     MARIADB_ROOT_PASSWORD \
-    YOUTARR_DB_PASSWORD; do
+    YOUTARR_DB_PASSWORD \
+    REMUX_API_KEY; do
     backup_value="$(env_value_from_file "$BACKUP_DIR/.env" "$key")"
     if [[ -n "$backup_value" ]]; then
       set_env_value .env "$key" "$backup_value"
