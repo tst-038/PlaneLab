@@ -2,8 +2,7 @@
 set -Eeuo pipefail
 
 VOLUMES=(
-  planelab_jellyfin_config
-  planelab_jellyfin_cache
+  planelab_remux_data
   planelab_seerr_config
   planelab_prowlarr_config
   planelab_sonarr_config

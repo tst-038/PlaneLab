@@ -106,9 +106,7 @@ if [[ -f "$BACKUP_DIR/.env" ]]; then
   # user/group IDs and network preferences deliberately remain machine-local.
   for key in \
     MARIADB_ROOT_PASSWORD \
-    YOUTARR_DB_PASSWORD \
-    JELLYFIN_API_KEY \
-    JELLYFIN_EXCLUDED_USERS; do
+    YOUTARR_DB_PASSWORD; do
     backup_value="$(env_value_from_file "$BACKUP_DIR/.env" "$key")"
     if [[ -n "$backup_value" ]]; then
       set_env_value .env "$key" "$backup_value"
@@ -117,11 +115,10 @@ if [[ -f "$BACKUP_DIR/.env" ]]; then
   chmod 600 .env
 fi
 
-"$SCRIPT_DIR/hardware-transcoding.sh" configure
+"$SCRIPT_DIR/gpu-passthrough.sh" configure
 
 storage_directories=(
   "$media_root/offline/movies" "$media_root/offline/shows" \
-  "$media_root/gelato/movies" "$media_root/gelato/shows" \
   "$media_root/YouTube" \
   "$download_root/incomplete" \
   "$download_root/complete/radarr" "$download_root/complete/sonarr"
@@ -177,13 +174,8 @@ for archive_path in "${archives[@]}"; do
     tar -xzf "/backup/$archive_name" -C /target
 done
 
-# External volumes must exist before Compose starts. This also creates volumes
-# intentionally excluded from backup, such as the disposable Jellyfin cache.
+# External volumes must exist before Compose starts.
 "$SCRIPT_DIR/prepare.sh"
-
-if [[ -f "$BACKUP_DIR/library-modes.json" ]]; then
-  cp "$BACKUP_DIR/library-modes.json" "$SCRIPT_DIR/library-modes.json"
-fi
 
 echo "Starting PlaneLab..."
 restored_mode=""

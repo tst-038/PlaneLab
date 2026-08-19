@@ -88,7 +88,8 @@ show_urls() {
 Connect to Wi-Fi: $HOTSPOT_SSID
 
 PlaneLab:
-  Jellyfin  http://jellyfin.planelab
+  Remux      http://jellyfin.planelab
+  Remux alt  http://remux.planelab
   Seerr     http://seerr.planelab
   Youtarr   http://youtarr.planelab
 EOF
@@ -96,7 +97,7 @@ EOF
 
 install_local_dns() {
   local config_file hosts_file aliases
-  aliases="jellyfin.planelab seerr.planelab sonarr.planelab radarr.planelab prowlarr.planelab sabnzbd.planelab rdtclient.planelab youtarr.planelab"
+  aliases="jellyfin.planelab remux.planelab seerr.planelab sonarr.planelab radarr.planelab prowlarr.planelab sabnzbd.planelab rdtclient.planelab youtarr.planelab"
   config_file="$(mktemp)"
   hosts_file="$(mktemp)"
 

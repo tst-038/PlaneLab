@@ -14,10 +14,10 @@ if ! docker compose version >/dev/null 2>&1; then
   exit 1
 fi
 
-"$SCRIPT_DIR/hardware-transcoding.sh" configure >/dev/null
+"$SCRIPT_DIR/gpu-passthrough.sh" configure >/dev/null
 
 VOLUMES=(
-  planelab_jellyfin_config
+  planelab_remux_data
   planelab_seerr_config
   planelab_prowlarr_config
   planelab_sonarr_config
@@ -65,7 +65,9 @@ for volume_name in "${VOLUMES[@]}"; do
 done
 
 cp compose.yml compose.tailscale.yml traefik.yml traefik-dynamic.yml \
-  library-modes.json "$BACKUP_DIR/"
+  "$BACKUP_DIR/"
+mkdir -p "$BACKUP_DIR/tailscale"
+cp tailscale/serve.json tailscale/start.sh "$BACKUP_DIR/tailscale/"
 if [[ -f .planelab-mode ]]; then
   cp .planelab-mode "$BACKUP_DIR/"
 fi

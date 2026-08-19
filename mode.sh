@@ -4,9 +4,9 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-CORE_SERVICES=(traefik jellyfin)
+CORE_SERVICES=(traefik remux)
 MANAGED_SERVICES=(
-  traefik jellyfin seerr prowlarr usenet-proxy sonarr radarr sabnzbd
+  traefik remux seerr prowlarr usenet-proxy sonarr radarr sabnzbd
   rdtclient mariadb youtarr
 )
 PREPARATION_SERVICES=("${MANAGED_SERVICES[@]}")
@@ -19,9 +19,9 @@ usage() {
   cat <<'EOF'
 Usage: ./mode.sh <home|prepare|travel|status>
 
-  home     Jellyfin/Gelato only; online libraries visible
-  prepare  Full stack on the Pi; online and offline libraries visible
-  travel   Jellyfin playback only; offline libraries visible
+  home     Remux playback only on the home server
+  prepare  Full stack on the Pi for downloading and Remux setup
+  travel   Remux playback only with the travel hotspot
   status   Show the last successfully applied mode
 EOF
 }
@@ -40,10 +40,6 @@ require_runtime() {
     echo "Error: Docker Engine with Compose is required." >&2
     exit 1
   fi
-  if ! command -v python3 >/dev/null 2>&1; then
-    echo "Error: python3 is required for Jellyfin mode switching." >&2
-    exit 1
-  fi
 }
 
 set_restart_policy() {
@@ -56,26 +52,6 @@ set_restart_policy() {
       docker update --restart="$policy" "$container_id" >/dev/null
     fi
   done
-}
-
-apply_jellyfin_mode() {
-  local mode api_key jellyfin_url excluded_users
-  mode="$1"
-  api_key="$(env_value JELLYFIN_API_KEY)"
-  jellyfin_url="$(env_value JELLYFIN_URL)"
-  excluded_users="$(env_value JELLYFIN_EXCLUDED_USERS)"
-  jellyfin_url="${jellyfin_url:-http://localhost:8096}"
-
-  if [[ -z "$api_key" || "$api_key" == "replace-with-jellyfin-api-key" ]]; then
-    echo "Error: configure JELLYFIN_API_KEY in .env first." >&2
-    echo "Jellyfin: Dashboard -> Advanced -> API Keys -> create PlaneLab key." >&2
-    return 1
-  fi
-
-  JELLYFIN_API_KEY="$api_key" \
-    JELLYFIN_URL="$jellyfin_url" \
-    JELLYFIN_EXCLUDED_USERS="$excluded_users" \
-    python3 "$SCRIPT_DIR/jellyfin-library-mode.py" "$mode"
 }
 
 activate_hotspot_for_travel() {
@@ -92,6 +68,13 @@ activate_hotspot_for_travel() {
     [[ -f "$SCRIPT_DIR/hotspot.env" ]]; then
     "$SCRIPT_DIR/hotspot.sh" up ||
       echo "Warning: travel mode is active but hotspot activation failed." >&2
+  fi
+}
+
+remove_legacy_jellyfin() {
+  if docker inspect jellyfin >/dev/null 2>&1; then
+    echo "Removing the legacy Jellyfin container; its volumes are preserved."
+    docker rm -f jellyfin >/dev/null
   fi
 }
 
@@ -119,8 +102,9 @@ case "$mode" in
 esac
 
 require_runtime
-"$SCRIPT_DIR/hardware-transcoding.sh" configure
+"$SCRIPT_DIR/gpu-passthrough.sh" configure
 "$SCRIPT_DIR/prepare.sh" >/dev/null
+remove_legacy_jellyfin
 
 # Keep the optional Linux Tailscale node alive in every operating mode.
 if docker compose config --services | grep -qx tailscale; then
@@ -132,8 +116,6 @@ fi
 case "$mode" in
   home)
     docker compose up -d "${CORE_SERVICES[@]}"
-    apply_jellyfin_mode home
-    "$SCRIPT_DIR/hardware-transcoding.sh" apply
     set_restart_policy no "${BACKGROUND_SERVICES[@]}"
     docker compose stop "${BACKGROUND_SERVICES[@]}"
     set_restart_policy unless-stopped "${CORE_SERVICES[@]}"
@@ -141,13 +123,9 @@ case "$mode" in
   prepare)
     docker compose up -d "${PREPARATION_SERVICES[@]}"
     set_restart_policy unless-stopped "${MANAGED_SERVICES[@]}"
-    apply_jellyfin_mode prepare
-    "$SCRIPT_DIR/hardware-transcoding.sh" apply
     ;;
   travel)
     docker compose up -d "${CORE_SERVICES[@]}"
-    apply_jellyfin_mode travel
-    "$SCRIPT_DIR/hardware-transcoding.sh" apply
     set_restart_policy no "${BACKGROUND_SERVICES[@]}"
     docker compose stop "${BACKGROUND_SERVICES[@]}"
     set_restart_policy unless-stopped "${CORE_SERVICES[@]}"

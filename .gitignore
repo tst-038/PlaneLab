@@ -3,7 +3,9 @@
 hotspot.env
 .planelab-mode
 .planelab-hardware
+.planelab-gpu
 compose.hardware.yml
+compose.gpu.yml
 backups/
 data/
 *.log

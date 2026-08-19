@@ -11,20 +11,19 @@ services:
       - ./traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik-dynamic.yml:/etc/traefik/dynamic.yml:ro
 
-  jellyfin:
-    image: jellyfin/jellyfin:latest
-    container_name: jellyfin
+  remux:
+    image: ghcr.io/lostb1t/remux:latest
+    container_name: remux
     init: true
     restart: unless-stopped
-    user: "1000:1000"
     ports:
-      - "8096:8096"
+      # Preserve the address used by existing Jellyfin-compatible clients.
+      - "8096:3000"
     environment:
       TZ: ${TZ:-Europe/Brussels}
     volumes:
-      - jellyfin_config:/config
-      - jellyfin_cache:/cache
-      - ${MEDIA_ROOT:?Set MEDIA_ROOT in .env}:/media
+      - remux_data:/data
+      - ${MEDIA_ROOT:?Set MEDIA_ROOT in .env}:/media:ro
 
   seerr:
     image: ghcr.io/seerr-team/seerr:latest
@@ -174,11 +173,8 @@ services:
       - ${MEDIA_ROOT:?Set MEDIA_ROOT in .env}/YouTube:/usr/src/app/data
 
 volumes:
-  jellyfin_config:
-    name: planelab_jellyfin_config
-    external: true
-  jellyfin_cache:
-    name: planelab_jellyfin_cache
+  remux_data:
+    name: planelab_remux_data
     external: true
   seerr_config:
     name: planelab_seerr_config

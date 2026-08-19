@@ -1,154 +1,123 @@
 # PlaneLab
 
-Offline-first Jellyfin provisioning stack for a Raspberry Pi or a macOS test
-machine. Use it only with media and sources you are authorized to access.
+Offline-first Remux media stack for a Raspberry Pi or a macOS test machine.
+Use it only with media and sources you are authorized to access.
 
-## PlaneLab control center
+## Control center
 
-The easiest way to manage the appliance is the dependency-free terminal UI:
+Run the dependency-free terminal interface:
 
 ```bash
 ./planelab
 ```
 
-It provides first-time setup, service control and updates, backup/restore,
-hotspot and temporary uplink management, Ethernet modes, logs, status, and all
-local service addresses. Navigate with the arrow keys and Enter (`j`/`k` also
-work), and press Escape to return to the previous screen. Numbered input
-remains available when no interactive terminal is attached. The same entry
-point also works without the menu:
+It handles setup, service control, modes, updates, backup and restore, network
+management, logs, status, and service addresses. The same entry point works
+without the menu:
 
 ```bash
 ./planelab setup
-./planelab backup
-./planelab update
+./planelab start
 ./planelab mode prepare
 ./planelab network uplink "WorkshopWiFi"
-./planelab network ethernet shared
+./planelab gpu status
 ```
 
 ## Services
 
-| Service | URL | Purpose |
+| Service | Local URL | Purpose |
 |---|---:|---|
-| Jellyfin | `http://jellyfin.planelab` | Offline playback |
+| Remux | `http://jellyfin.planelab` | Media server and playback |
+| Remux alias | `http://remux.planelab` | Alternate local name |
 | Seerr | `http://seerr.planelab` | Requests |
 | Sonarr | `http://sonarr.planelab` | TV management |
 | Radarr | `http://radarr.planelab` | Movie management |
 | Prowlarr | `http://prowlarr.planelab` | Indexer management |
 | SABnzbd | `http://sabnzbd.planelab` | TorBox News/Usenet client |
 | RDTClient | `http://rdtclient.planelab` | TorBox torrent adapter |
-| Youtarr | `http://youtarr.planelab` | YouTube library provisioning |
+| Youtarr | `http://youtarr.planelab` | YouTube provisioning |
 
-Traefik listens on port 80 and routes each local hostname to its service.
-NetworkManager's shared DNS advertises the names to hotspot and shared-Ethernet
-clients. The original IP-and-port URLs remain available for troubleshooting.
+Remux replaces Jellyfin and keeps the familiar external port `8096`, the
+`jellyfin.planelab` hostname, and `svc:jellyfin` Tailscale Service name. That
+avoids changing existing client addresses. The `remux.planelab` hostname is an
+additional alias; there is only one media-server container.
 
-## Remote access with Tailscale
+Traefik listens on port 80 and routes the local hostnames. Direct IP-and-port
+addresses remain available for troubleshooting.
 
-On Raspberry Pi/Linux, PlaneLab can run Tailscale in Docker's host network
-namespace. The Pi gets a private tailnet address and every published web UI is
-reachable by authorized tailnet devices without exposing it to the public
-internet.
+## First setup
 
-Create a one-off auth key in the Tailscale admin console (pre-authorized if
-your tailnet uses device approval), then
-configure the Pi's private `.env`:
+The easiest setup is:
+
+```bash
+cp .env.example .env
+./planelab setup
+```
+
+For a manual macOS test setup:
+
+```bash
+mkdir -p data/media/{offline/{movies,shows},YouTube}
+mkdir -p data/downloads/{incomplete,complete/{radarr,sonarr}}
+./prepare.sh
+./gpu-passthrough.sh configure
+docker compose config
+docker compose pull
+docker compose up -d
+```
+
+`prepare.sh` only creates the external Docker volumes. It does not start the
+stack, modify Remux, or configure Tailscale.
+
+On the first start after this migration, PlaneLab removes the legacy container
+named `jellyfin` so Remux can claim port `8096`. It does not delete
+the old `planelab_jellyfin_config` or `planelab_jellyfin_cache` volumes. They
+remain available for manual recovery until you deliberately remove them.
+
+## Raspberry Pi storage
+
+Use Raspberry Pi OS 64-bit, install Docker Engine and its Compose plugin, and
+mount the media SSD at `/mnt/nvme`.
+
+```bash
+sudo mkdir -p /mnt/nvme/media/{offline/{movies,shows},YouTube}
+sudo mkdir -p /mnt/nvme/downloads/{incomplete,complete/{radarr,sonarr}}
+sudo chown -R 1000:1000 /mnt/nvme
+```
+
+Use these values in `.env`:
 
 ```dotenv
-COMPOSE_FILE=compose.yml:compose.hardware.yml:compose.tailscale.yml
+MEDIA_ROOT=/mnt/nvme/media
+DOWNLOAD_ROOT=/mnt/nvme/downloads
+COMPOSE_FILE=compose.yml:compose.gpu.yml:compose.tailscale.yml
+PLANELAB_GPU_PASSTHROUGH=auto
 TAILSCALE_HOSTNAME=planelab
 TAILSCALE_AUTHKEY=tskey-auth-...
 ```
 
-Start and verify it:
+Never start the stack until `/mnt/nvme` is mounted. PlaneLab refuses to create
+the configured paths when that mount is absent.
 
-```bash
-./prepare.sh
-docker compose up -d tailscale
-docker compose exec tailscale tailscale status
-```
+## Remux sources and modes
 
-PlaneLab also configures the node as a host for the Tailscale Service
-`svc:jellyfin`, forwarding its stable `tcp:8096` endpoint to the local
-Jellyfin instance. Create that Service with endpoint `tcp:8096` on the
-Tailscale Services page. The PlaneLab node must have a tag-based identity
-(for example `tag:media-server`); apply that tag on the Machines page or use a
-tagged auth key. Approve PlaneLab under the Service's pending hosts after its
-first start. The mounted `tailscale/serve.json` is automatically applied and
-advertised again after container restarts.
+Configure local Remux sources below the read-only `/media` mount:
 
-With MagicDNS enabled, use the machine name and the existing service ports:
+- movies: `/media/offline/movies`
+- series: `/media/offline/shows`
+- YouTube: `/media/YouTube`
 
-| Service | Tailnet URL |
-|---|---:|
-| Jellyfin | `http://planelab:8096` |
-| Seerr | `http://planelab:5055` |
-| Sonarr | `http://planelab:8989` |
-| Radarr | `http://planelab:7878` |
-| Prowlarr | `http://planelab:9696` |
-| SABnzbd | `http://planelab:8080` |
-| RDTClient | `http://planelab:6500` |
-| Youtarr | `http://planelab:3087` |
+Configure Stremio add-ons and online catalogs in Remux itself. Remux handles
+its own streaming and transcoding choices; PlaneLab no longer writes encoding
+settings through an API.
 
-If MagicDNS is disabled, replace `planelab` with the `100.x.y.z` address from
-`docker compose exec tailscale tailscale ip -4`. The identity is stored in the
-external `planelab_tailscale_state` volume, so the auth key can be cleared
-after the first successful login. Tailscale stays running in every PlaneLab
-mode. Its machine identity is deliberately excluded from transferable backups
-to prevent two restored hosts from claiming the same tailnet node; enroll a
-restored machine with its own auth key.
+PlaneLab modes now control which containers run:
 
-The override requires Linux, `/dev/net/tun`, and host networking. On macOS,
-leave it out of `COMPOSE_FILE` and use the native Tailscale app; the same host
-ports are reachable through the Mac's tailnet address.
-
-## Home, preparation and travel modes
-
-PlaneLab keeps one complete set of application volumes and switches runtime
-behaviour without deleting containers or splitting backups:
-
-| Mode | Intended machine | Running services | Visible managed libraries |
-|---|---|---|---|
-| `home` | Home server | Jellyfin and Traefik | Gelato movies/series |
-| `prepare` | Pi with internet | Full stack, including Youtarr and all download services | Online, offline and YouTube |
-| `travel` | Pi while travelling | Jellyfin and Traefik | Offline movies/series and YouTube |
-
-Youtarr, MariaDB, Seerr, Sonarr, Radarr, Prowlarr, SABnzbd, RDTClient and the
-Usenet proxy run only in `prepare`. YouTube is hidden at home and visible in
-`prepare` and `travel`. Other unmanaged Jellyfin libraries such as music or
-photos remain visible in every mode. Modes change library access for existing
-Jellyfin users; they do not delete or recreate libraries. A comma-separated
-`JELLYFIN_EXCLUDED_USERS` value can exempt specific accounts.
-
-Create an API key under **Jellyfin Dashboard -> Advanced -> API Keys**, then
-configure it through **Operating mode -> Configure Jellyfin API key** in the
-TUI or place it in the private `.env`:
-
-```dotenv
-JELLYFIN_URL=http://localhost:8096
-JELLYFIN_API_KEY=your-generated-key
-JELLYFIN_EXCLUDED_USERS=
-PLANELAB_TRAVEL_HOTSPOT=auto
-```
-
-All configured libraries must exist with these exact container paths before
-the first mode switch:
-
-```text
-/media/offline/movies
-/media/offline/shows
-/media/gelato/movies
-/media/gelato/shows
-/media/YouTube
-```
-
-The mapping is data-driven in `library-modes.json`. Each entry defines a
-container path and the modes in which it is visible. Add or change libraries
-there without editing the Python helper. The file is included in every backup
-and restored with the application state.
-
-Switch from the TUI or command line:
+| Mode | Running services |
+|---|---|
+| `home` | Remux, Traefik, and optional Tailscale |
+| `prepare` | Full stack, including download and request services |
+| `travel` | Remux, Traefik, optional Tailscale, and the configured hotspot |
 
 ```bash
 ./planelab mode home
@@ -157,140 +126,87 @@ Switch from the TUI or command line:
 ./planelab mode status
 ```
 
-Stopped background containers receive Docker restart policy `no`, so a daemon
-or machine reboot does not unexpectedly start download services in `home` or
-`travel`. `prepare` restores `unless-stopped` and starts the complete stack.
-With `PLANELAB_TRAVEL_HOTSPOT=auto`, travel mode activates an already installed
-hotspot on Linux when NetworkManager and `hotspot.env` are available. It never
-installs or replaces a hotspot automatically.
+The old path-based Jellyfin library visibility mechanism has been removed.
+Remux currently accepts Jellyfin-compatible `EnabledFolders` fields without
+enforcing them, so PlaneLab cannot safely hide individual Remux catalogs by
+mode. Configure each user's catalog filters in Remux. Local sources remain
+playable offline; online sources naturally require an uplink.
 
-## Automatic hardware transcoding
+Background containers receive restart policy `no` in `home` and `travel`, so
+a Docker or machine restart does not bring download services back. `prepare`
+restores `unless-stopped` and starts the full stack.
 
-PlaneLab detects transcoding support per host whenever setup, restore, start or
-a mode switch runs:
+## GPU passthrough
 
-- non-Pi Linux with an Intel DRI render device: QSV enabled;
-- non-Pi Linux with an AMD DRI render device: VA-API enabled;
-- macOS Docker: disabled;
-- Raspberry Pi: disabled;
-- missing/unsupported DRI device, including NVIDIA without its separate
-  container-toolkit setup: disabled.
+PlaneLab only detects and exposes a supported Linux DRI render device to
+Remux. Remux decides whether and how to use that device for transcoding.
 
-Detection generates the machine-local `compose.hardware.yml`, passes the render
-device and its supplemental groups into the official Jellyfin container, then
-updates Jellyfin's encoding configuration through the API. On a Pi or Mac it
-actively sets Jellyfin hardware acceleration to `none`, which makes a restored
-server backup safe to use there. The generated override is never backed up;
-every target detects its own hardware after restore.
+- Intel and AMD DRI render devices on non-Pi Linux are passed through.
+- macOS Docker and Raspberry Pi leave passthrough disabled.
+- unsupported or missing devices leave passthrough disabled.
+- set `PLANELAB_GPU_PASSTHROUGH=off` to force it off.
 
-The default is:
-
-```dotenv
-COMPOSE_FILE=compose.yml:compose.hardware.yml
-PLANELAB_HARDWARE_TRANSCODING=auto
-```
-
-Set the latter to `off` to force software transcoding. Inspect or rerun
-detection with:
+Detection writes the machine-local `compose.gpu.yml`; this generated file is
+not backed up and is regenerated on setup, restore, start, restart, and mode
+changes.
 
 ```bash
-./planelab hardware status
-./planelab hardware configure
-./planelab hardware apply
+./planelab gpu status
+./planelab gpu configure
 ```
 
-PlaneLab preserves unrelated Jellyfin encoding settings and does not blindly
-enable codecs the GPU may not support. Jellyfin recommends exposing the Linux
-DRI render device and its render group to the container for Intel/AMD hardware
-acceleration. See the official [Intel](https://jellyfin.org/docs/general/post-install/transcoding/hardware-acceleration/intel/)
-and [AMD](https://jellyfin.org/docs/general/post-install/transcoding/hardware-acceleration/amd/)
-guides. Jellyfin currently discourages Raspberry Pi hardware for this workload;
-see [hardware selection](https://jellyfin.org/docs/general/administration/hardware-selection/).
+There is no encoder setter or Jellyfin API key anymore.
 
-## UsenetCrawler search compatibility
+## Remote access with Tailscale
 
-UsenetCrawler's general `search` returns releases that its structured
-`tvsearch` omits. PlaneLab includes a small local proxy that changes
-title-based TV searches into general searches:
+On Linux, PlaneLab runs Tailscale in the host network namespace when
+`compose.tailscale.yml` is part of `COMPOSE_FILE`. Create a one-off auth key in
+the Tailscale admin console and configure `.env` as shown above.
 
-```text
-Sonarr -> Prowlarr -> usenet-proxy -> UsenetCrawler -> SABnzbd
-```
-
-The proxy removes the broken category, season and episode filters and sends
-only the series title as a general search. Sonarr then parses and filters the
-broad result set itself. Capability checks, downloads and API keys pass through
-unchanged. Request URLs are deliberately not logged because they contain the
-API key.
-
-Build and start it:
+Start and inspect it with:
 
 ```bash
-docker compose up -d --build usenet-proxy
+./planelab start
+docker compose exec tailscale tailscale status
 ```
 
-In Prowlarr, remove or disable the direct UsenetCrawler entry, then add its
-**Generic Newznab** replacement:
+The startup wrapper waits for authentication, applies
+`tailscale/serve.json`, and advertises the node for `svc:jellyfin` after every
+container restart. That compatibility-named service forwards `tcp:8096` to
+Remux.
 
-- Name: `UsenetCrawler via PlaneLab proxy`
-- URL: `http://usenet-proxy:8080`
-- API path: `/api`
-- API key: a newly generated UsenetCrawler key
-- Categories: the normal TV categories
+Create `svc:jellyfin` with endpoint `tcp:8096` in the Tailscale Services page.
+The PlaneLab node needs a tag-based identity, for example
+`tag:media-server`. Apply the tag on the Machines page or use a tagged auth
+key, then approve PlaneLab as a Service host.
 
-Run **Test**, save it, and perform a Prowlarr search first. Prowlarr will sync
-this indexer to Sonarr through the already configured application connection.
-Do not keep the old direct entry enabled or every query will be sent twice.
+With MagicDNS enabled, the direct tailnet addresses are:
 
-## First start on macOS
+| Service | Tailnet URL |
+|---|---:|
+| Remux | `http://planelab:8096` |
+| Seerr | `http://planelab:5055` |
+| Sonarr | `http://planelab:8989` |
+| Radarr | `http://planelab:7878` |
+| Prowlarr | `http://planelab:9696` |
+| SABnzbd | `http://planelab:8080` |
+| RDTClient | `http://planelab:6500` |
+| Youtarr | `http://planelab:3087` |
+
+Without MagicDNS, replace `planelab` with the `100.x.y.z` address reported by:
 
 ```bash
-cp .env.example .env
-mkdir -p data/media/{offline/{movies,shows},gelato/{movies,shows},YouTube}
-mkdir -p data/downloads/{incomplete,complete/{radarr,sonarr}}
-./prepare.sh
-docker compose config
-docker compose pull
-docker compose up -d
+docker compose exec tailscale tailscale ip -4
 ```
 
-## Raspberry Pi
+Tailscale stays running in every PlaneLab mode. Its identity lives in the
+external `planelab_tailscale_state` volume and is excluded from transferable
+backups, preventing restored machines from claiming the same node identity.
+On macOS, omit `compose.tailscale.yml` and use the native Tailscale app.
 
-Use Raspberry Pi OS 64-bit. Ensure `uname -m` reports `aarch64`, install Docker
-Engine and the Compose plugin, and mount the media SSD at `/mnt/nvme`.
+## PlaneLab hotspot
 
-Create the storage directories:
-
-```bash
-sudo mkdir -p /mnt/nvme/media/{offline/{movies,shows},gelato/{movies,shows},YouTube}
-sudo mkdir -p /mnt/nvme/downloads/{incomplete,complete/{radarr,sonarr}}
-sudo chown -R 1000:1000 /mnt/nvme
-```
-
-Copy `.env.example` to `.env` and use:
-
-```dotenv
-MEDIA_ROOT=/mnt/nvme/media
-DOWNLOAD_ROOT=/mnt/nvme/downloads
-COMPOSE_FILE=compose.yml:compose.hardware.yml:compose.tailscale.yml
-TAILSCALE_HOSTNAME=planelab
-TAILSCALE_AUTHKEY=tskey-auth-...
-```
-
-Never start the stack until `/mnt/nvme` is mounted. Otherwise Docker may create
-the directories on the Pi's SD card.
-
-Create the external application volumes before the first start:
-
-```bash
-./prepare.sh
-docker compose up -d
-```
-
-## PlaneLab Wi-Fi hotspot
-
-Raspberry Pi OS Bookworm and newer use NetworkManager. Configure a persistent
-hotspot with:
+On Raspberry Pi OS with NetworkManager:
 
 ```bash
 cp hotspot.env.example hotspot.env
@@ -298,261 +214,73 @@ nano hotspot.env
 ./hotspot.sh install
 ```
 
-Run this from a local console or an Ethernet SSH session. If `wlan0` currently
-carries SSH, the script refuses to disconnect it unless you explicitly use
-`./hotspot.sh install --force`.
-
-The default hotspot is:
-
-```text
-SSID: PlaneLab
-Pi address: 10.42.0.1
-Band: 5 GHz, channel 36
-SSID broadcast: hidden
-Security: WPA2/WPA3 Personal transition mode, AES/CCMP, WPS disabled
-```
-
-NetworkManager's shared IPv4 mode supplies DHCP and DNS to passengers and
-shares an Ethernet/second-adapter uplink when one exists. No uplink is required
-to use Jellyfin offline. Client isolation, hidden SSID, and connection autostart
-are enabled. Passengers must manually enter the exact SSID and password.
-
-NetworkManager calls WPA2/WPA3 Personal transition mode `wpa-psk`. Recent
-clients can negotiate WPA3 while older clients retain WPA2 compatibility.
-WPA3-only (`sae`) is deliberately not the default because Raspberry Pi AP
-drivers and older passenger devices can fail to connect to it.
+Run installation from a local console or Ethernet SSH session. The script
+refuses to disconnect the active Wi-Fi SSH path unless `--force` is supplied.
+The default hotspot uses address `10.42.0.1`, a hidden 5 GHz SSID, and
+WPA2/WPA3 Personal transition mode. No uplink is needed for local Remux
+playback.
 
 Useful commands:
 
 ```bash
 ./hotspot.sh status
+./hotspot.sh up
 ./hotspot.sh down
-./hotspot.sh up
-./hotspot.sh ethernet smart
-./hotspot.sh ethernet auto
-./hotspot.sh ethernet shared
-./hotspot.sh remove
-```
-
-The connection profile autostarts after reboot. PlaneLab is always reached
-directly through the fixed address `10.42.0.1`. Installing the hotspot also
-enables automatic Ethernet smart detection as a systemd service and installs
-the local `.planelab` DNS records.
-
-After `./hotspot.sh install` and `docker compose up -d`, clients using PlaneLab
-DHCP can open services without remembering IP addresses or ports:
-
-```text
-http://jellyfin.planelab
-http://seerr.planelab
-http://youtarr.planelab
-```
-
-Clients connected through an unrelated router in Ethernet `auto` mode use that
-router's DNS and may not know the private names. In that case use the Pi's
-assigned address and original service port. Private/secure DNS settings on some
-phones can also bypass the DNS server supplied by PlaneLab.
-
-### Temporarily connect to uplink Wi-Fi
-
-Switch the built-in adapter from hotspot to Wi-Fi client mode. Supplying only
-the SSID makes the script ask for the password without displaying it:
-
-```bash
 ./hotspot.sh uplink "WorkshopWiFi"
-```
-
-For maximum convenience, the password can also be supplied directly. Be aware
-that this may store it in your shell history:
-
-```bash
-./hotspot.sh uplink "WorkshopWiFi" "the-password"
-```
-
-Return to PlaneLab hotspot mode:
-
-```bash
-./hotspot.sh up
-```
-
-The script automatically stops the hotspot, uses NetworkManager's normal
-`device wifi connect` flow, and marks the temporary uplink as non-autoconnect.
-After a reboot, the PlaneLab hotspot therefore starts automatically again. A
-single Wi-Fi adapter cannot reliably serve the 5 GHz hotspot and connect to
-another Wi-Fi network simultaneously. Use Ethernet or a second Wi-Fi adapter
-if both must remain active.
-
-### Choose the Ethernet mode
-
-The recommended mode first tries to obtain a DHCP lease and IPv4 default
-gateway from an Ethernet router. Merely activating through IPv6 link-local or
-receiving an address without a gateway does not count as an uplink. If no
-usable gateway is found within 12 seconds, PlaneLab automatically switches the
-port to shared mode:
-
-```bash
 ./hotspot.sh ethernet smart
-```
-
-This is the default behaviour after `./hotspot.sh install`. A lightweight
-watcher checks for Ethernet carrier changes and reruns smart detection whenever
-a cable is connected while the PlaneLab hotspot is active. It also detects an
-already connected cable when the hotspot starts or the Pi reboots. The watcher
-does nothing while PlaneLab is using temporary uplink Wi-Fi. Disable this
-automation by setting `ETHERNET_SMART_WATCH=no` before reinstalling the hotspot;
-`./hotspot.sh remove` removes the installed systemd service.
-
-Use `auto` when the Pi is connected to a router and should receive an address
-and internet connection through DHCP:
-
-```bash
 ./hotspot.sh ethernet auto
-```
-
-Use `shared` when a laptop or other device is connected directly to the Pi and
-the Pi should provide DHCP and networking over the Ethernet cable:
-
-```bash
 ./hotspot.sh ethernet shared
 ```
 
-Shared Ethernet uses `10.42.1.1/24`, separate from the Wi-Fi hotspot at
-`10.42.0.1/24`. The selected Ethernet mode persists across reboots. It does not
-change the Wi-Fi hotspot itself, which must remain in NetworkManager's `shared`
-mode to provide addresses to its Wi-Fi clients.
+`smart` first requests a normal DHCP uplink and switches to shared Ethernet if
+no usable IPv4 gateway appears. Shared Ethernet uses `10.42.1.1/24`. The Wi-Fi
+hotspot remains on `10.42.0.1/24`.
 
-## Internal paths
+## Application paths
 
-Configure applications with container paths, never host paths:
+Use container paths when configuring applications:
 
-- Sonarr root folder: `/media/offline/shows`
-- Radarr root folder: `/media/offline/movies`
-- Gelato movie base path: `/media/gelato/movies`
-- Gelato series base path: `/media/gelato/shows`
+- Sonarr root: `/media/offline/shows`
+- Radarr root: `/media/offline/movies`
 - SABnzbd temporary folder: `/downloads/incomplete`
 - SABnzbd completed folder: `/downloads/complete`
-- RDTClient download and mapped paths: `/downloads`
+- RDTClient download/mapped path: `/downloads`
+- Remux local source root: `/media`
 - Youtarr internal data path: `/usr/src/app/data`
 
-Youtarr's `YOUTUBE_OUTPUT_DIR` variable is informational and represents the
-host directory. Its actual in-container download directory is `DATA_PATH`,
-which defaults to `/usr/src/app/data`. The Compose file therefore mounts
-`${MEDIA_ROOT}/YouTube` at `/usr/src/app/data`.
+Containers address one another by Compose service name, for example
+`http://remux:3000`, `http://sonarr:8989`, `http://radarr:7878`, and
+`http://sabnzbd:8080`.
 
-### Offline and Gelato libraries
+## UsenetCrawler compatibility proxy
 
-Keep downloaded files and Gelato catalog entries in separate trees:
+UsenetCrawler's general search can return releases omitted by structured TV
+search. PlaneLab includes a local proxy:
 
 ```text
-/media
-├── offline
-│   ├── movies
-│   └── shows
-├── gelato
-│   ├── movies
-│   └── shows
-└── YouTube
+Sonarr -> Prowlarr -> usenet-proxy -> UsenetCrawler -> SABnzbd
 ```
 
-Create four dedicated Jellyfin libraries:
+In Prowlarr, add a Generic Newznab indexer using URL
+`http://usenet-proxy:8080`, API path `/api`, and your UsenetCrawler API key.
+Disable the old direct UsenetCrawler entry so queries are not duplicated.
 
-| Jellyfin library | Type | Only path |
-|---|---|---|
-| `✈️ Films gedownload` | Movies | `/media/offline/movies` |
-| `✈️ Series gedownload` | Shows | `/media/offline/shows` |
-| `🌐 Films online` | Movies | `/media/gelato/movies` |
-| `🌐 Series online` | Shows | `/media/gelato/shows` |
-
-Configure Gelato to import movies and series only into its two
-`/media/gelato/...` paths. Never add a Gelato path to either downloaded
-library. Jellyfin's global search and continue-watching views can still include
-online entries because those views span libraries.
-
-For an existing installation, create the new directories first, move existing
-movie and series files into the corresponding `/media/offline/...`
-directories, then update the root folders in Radarr and Sonarr. Do not leave
-the old `/media/movies` or `/media/shows` roots configured after migration.
-
-Containers address one another by Compose service name:
-
-- `http://jellyfin:8096`
-- `http://sonarr:8989`
-- `http://radarr:7878`
-- `http://prowlarr:9696`
-- `http://usenet-proxy:8080` (Prowlarr only)
-- `http://sabnzbd:8080`
-- `http://rdtclient:6500`
-
-## Back up application data
+## Backup and restore
 
 ```bash
 ./backup.sh
-```
-
-The script stops the stack briefly and stores consistent archives under a
-timestamped `backups/` directory. Media, downloads, and Jellyfin cache are
-excluded. The resulting backup contains credentials and must be stored
-securely outside Git. Every application volume is included even when its
-container is stopped by the current mode. Backup records the current mode and
-restarts only the services that were running before the backup.
-
-## Restore on a new machine
-
-Copy a timestamped backup directory into `backups/`, then run:
-
-```bash
 ./restore.sh backups/20260728T120000Z
 ```
 
-If `.env` does not exist, restore copies it from the backup and stops so you
-can review `MEDIA_ROOT` and `DOWNLOAD_ROOT` for the current machine. Relative
-macOS paths such as `./data/media` are valid. When either configured path is
-under `/mnt/nvme`, restore additionally verifies that `/mnt/nvme` is mounted
-before creating directories or touching application volumes.
+Backups briefly stop the managed stack and archive every application volume,
+including `planelab_remux_data`. Media, downloads, GPU configuration, and the
+Tailscale machine identity are excluded. The private `.env` and backup data
+contain credentials and must be stored securely outside Git.
 
-When the target already has `.env`, restore preserves its machine-specific
-paths, UID/GID and network settings. It imports the MariaDB, Youtarr and
-Jellyfin API credentials that belong to the restored volumes. If the backup
-contains a recorded PlaneLab mode, restore reapplies that mode instead of
-blindly starting every service.
-
-### Server-to-Pi handoff
-
-The home server never needs to download media:
-
-```text
-Home server: mode home -> backup
-Pi:          restore -> mode prepare -> download travel media -> mode travel
-Return:      Pi backup -> restore on server -> mode home
-```
-
-The configuration backup is complete, but media remains intentionally
-separate. Offline files must already be on the Pi NVMe or be transferred
-separately. Do not run both restored copies as independently changing masters;
-stop and back up the current machine before restoring onto the other one.
-
-Restore refuses non-empty volumes. To deliberately replace an existing
-installation:
-
-```bash
-./restore.sh --replace backups/20260728T120000Z
-```
-
-`--replace` deletes and recreates matching PlaneLab configuration volumes.
-It never touches media or download directories.
-
-## Git
-
-```bash
-git init
-git add compose.yml compose.tailscale.yml traefik.yml traefik-dynamic.yml library-modes.json \
-  .env.example hotspot.env.example .gitignore prepare.sh backup.sh restore.sh \
-  hotspot.sh ethernet-watch.sh mode.sh hardware-transcoding.sh \
-  hardware-transcoding.py jellyfin-library-mode.py planelab README.md
-git commit -m "Initial PlaneLab stack"
-```
-
-Do not commit `.env`, `backups/`, media, downloads, API keys, or passwords.
+Restore preserves machine-specific paths and network settings when a target
+already has `.env`. It refuses non-empty volumes unless `--replace` is used.
+That option replaces matching application volumes but never touches media or
+download directories.
 
 ## Useful checks
 
@@ -560,13 +288,16 @@ Do not commit `.env`, `backups/`, media, downloads, API keys, or passwords.
 docker compose config
 docker compose ps
 docker compose logs --tail=100
+docker compose exec remux ls -la /media/offline
 docker compose exec sonarr ls -la /media/offline/shows
 docker compose exec radarr ls -la /media/offline/movies
-docker compose exec jellyfin ls -la /media/gelato
 docker compose exec sabnzbd ls -la /downloads
 ```
 
-Application volumes are declared `external: true`. Compose therefore reuses
-volumes restored or created by `prepare.sh`, and even `docker compose down -v`
-will not delete them. Delete an external volume only with an explicit
-`docker volume rm planelab_...` command.
+Application volumes are declared `external: true`, so Compose reuses volumes
+created by `prepare.sh` or restore. Even `docker compose down -v` does not
+delete them; external volumes require an explicit `docker volume rm` command.
+
+Remux is still early-stage software and may contain rough edges or breaking
+changes. Its upstream project and current container example are documented at
+[lostb1t/remux](https://github.com/lostb1t/remux).

@@ -150,11 +150,18 @@ mode_state() {
   fi
 }
 
-hardware_state() {
-  if [[ -x "$SCRIPT_DIR/hardware-transcoding.sh" ]]; then
-    "$SCRIPT_DIR/hardware-transcoding.sh" status 2>/dev/null
+gpu_state() {
+  if [[ -x "$SCRIPT_DIR/gpu-passthrough.sh" ]]; then
+    "$SCRIPT_DIR/gpu-passthrough.sh" status 2>/dev/null
   else
     printf 'not configured'
+  fi
+}
+
+remove_legacy_jellyfin() {
+  if docker inspect jellyfin >/dev/null 2>&1; then
+    printf '%s\n' "${YELLOW}Removing the legacy Jellyfin container; its volumes are preserved.${RESET}"
+    docker rm -f jellyfin >/dev/null
   fi
 }
 
@@ -168,16 +175,14 @@ random_secret() {
 
 setup_stack() {
   local media_default downloads_default media_root download_root
-  local existing_root_password existing_youtarr_password existing_jellyfin_key
-  local existing_excluded_users existing_travel_hotspot existing_hardware
+  local existing_root_password existing_youtarr_password
+  local existing_travel_hotspot existing_gpu
   require_docker || return
 
   existing_root_password=""
   existing_youtarr_password=""
-  existing_jellyfin_key=""
-  existing_excluded_users=""
   existing_travel_hotspot=""
-  existing_hardware=""
+  existing_gpu=""
   if [[ -f .env ]]; then
     existing_root_password="$(
       sed -n 's/^MARIADB_ROOT_PASSWORD=//p' .env | tail -n 1
@@ -185,18 +190,15 @@ setup_stack() {
     existing_youtarr_password="$(
       sed -n 's/^YOUTARR_DB_PASSWORD=//p' .env | tail -n 1
     )"
-    existing_jellyfin_key="$(
-      sed -n 's/^JELLYFIN_API_KEY=//p' .env | tail -n 1
-    )"
-    existing_excluded_users="$(
-      sed -n 's/^JELLYFIN_EXCLUDED_USERS=//p' .env | tail -n 1
-    )"
     existing_travel_hotspot="$(
       sed -n 's/^PLANELAB_TRAVEL_HOTSPOT=//p' .env | tail -n 1
     )"
-    existing_hardware="$(
-      sed -n 's/^PLANELAB_HARDWARE_TRANSCODING=//p' .env | tail -n 1
+    existing_gpu="$(
+      sed -n 's/^PLANELAB_GPU_PASSTHROUGH=//p' .env | tail -n 1
     )"
+    if [[ -z "$existing_gpu" ]]; then
+      existing_gpu="$(sed -n 's/^PLANELAB_HARDWARE_TRANSCODING=//p' .env | tail -n 1)"
+    fi
   fi
 
   if [[ -f .env ]] && ! confirm ".env already exists. Replace it?"; then
@@ -227,21 +229,17 @@ setup_stack() {
       printf 'MEDIA_ROOT=%s\n' "$media_root"
       printf 'DOWNLOAD_ROOT=%s\n\n' "$download_root"
       if [[ "$(uname -s)" == "Linux" && -f compose.tailscale.yml ]]; then
-        printf 'COMPOSE_FILE=compose.yml:compose.hardware.yml:compose.tailscale.yml\n'
+        printf 'COMPOSE_FILE=compose.yml:compose.gpu.yml:compose.tailscale.yml\n'
       else
-        printf 'COMPOSE_FILE=compose.yml:compose.hardware.yml\n'
+        printf 'COMPOSE_FILE=compose.yml:compose.gpu.yml\n'
       fi
       printf 'MARIADB_ROOT_PASSWORD=%s\n' \
         "${existing_root_password:-$(random_secret)}"
       printf 'YOUTARR_DB_PASSWORD=%s\n' \
         "${existing_youtarr_password:-$(random_secret)}"
-      printf 'JELLYFIN_URL=http://localhost:8096\n'
-      printf 'JELLYFIN_API_KEY=%s\n' "$existing_jellyfin_key"
-      printf 'JELLYFIN_EXCLUDED_USERS=%s\n' "$existing_excluded_users"
       printf 'PLANELAB_TRAVEL_HOTSPOT=%s\n' \
         "${existing_travel_hotspot:-auto}"
-      printf 'PLANELAB_HARDWARE_TRANSCODING=%s\n' \
-        "${existing_hardware:-auto}"
+      printf 'PLANELAB_GPU_PASSTHROUGH=%s\n' "${existing_gpu:-auto}"
     } > .env
     chmod 600 .env
     printf '%s\n' "${GREEN}Created private .env with random database passwords.${RESET}"
@@ -264,7 +262,6 @@ setup_stack() {
       fi
       sudo mkdir -p \
         "$media_root/offline/movies" "$media_root/offline/shows" \
-        "$media_root/gelato/movies" "$media_root/gelato/shows" \
         "$media_root/YouTube" \
         "$download_root/incomplete" \
         "$download_root/complete/radarr" "$download_root/complete/sonarr"
@@ -273,65 +270,23 @@ setup_stack() {
   else
     mkdir -p \
       "$media_root/offline/movies" "$media_root/offline/shows" \
-      "$media_root/gelato/movies" "$media_root/gelato/shows" \
       "$media_root/YouTube" \
       "$download_root/incomplete" \
       "$download_root/complete/radarr" "$download_root/complete/sonarr"
   fi
 
   ./prepare.sh
-  "$SCRIPT_DIR/hardware-transcoding.sh" configure
+  "$SCRIPT_DIR/gpu-passthrough.sh" configure
+  remove_legacy_jellyfin
   docker compose config --quiet
   docker compose pull
   case "$(mode_state)" in
     home|prepare|travel) "$SCRIPT_DIR/mode.sh" "$(mode_state)" ;;
     *)
       docker compose up -d
-      "$SCRIPT_DIR/hardware-transcoding.sh" apply
       ;;
   esac
   docker compose ps
-}
-
-set_env_value() {
-  local key value temp_file
-  key="$1"
-  value="$2"
-  if [[ "$value" == *$'\n'* ]]; then
-    printf '%s\n' "${RED}Values may not contain newlines.${RESET}" >&2
-    return 1
-  fi
-  temp_file="$(mktemp)"
-  awk -v key="$key" -v value="$value" '
-    BEGIN { found = 0 }
-    index($0, key "=") == 1 {
-      if (!found) print key "=" value
-      found = 1
-      next
-    }
-    { print }
-    END { if (!found) print key "=" value }
-  ' .env > "$temp_file"
-  mv "$temp_file" .env
-  chmod 600 .env
-}
-
-configure_jellyfin_api() {
-  local api_key
-  require_config || return
-  printf '%s\n' \
-    "Create an API key in Jellyfin:" \
-    "Dashboard -> Advanced -> API Keys -> + -> PlaneLab"
-  read -r -s -p "Jellyfin API key: " api_key
-  printf '\n'
-  if [[ -z "$api_key" ]]; then
-    printf '%s\n' "${YELLOW}API key was not changed.${RESET}"
-    return
-  fi
-  set_env_value JELLYFIN_URL "http://localhost:8096"
-  set_env_value JELLYFIN_API_KEY "$api_key"
-  unset api_key
-  printf '%s\n' "${GREEN}Jellyfin API key saved in private .env.${RESET}"
 }
 
 mode_menu() {
@@ -340,15 +295,13 @@ mode_menu() {
     printf '  %sOPERATING MODE%s\n\n' "$BOLD" "$RESET"
     printf '  Current: %s\n\n' "$(mode_state)"
     arrow_menu \
-      "Home — online streaming only" \
+      "Home — Remux playback only" \
       "Prepare — download on the Pi" \
-      "Travel — offline playback only" \
-      "Configure Jellyfin API key"
+      "Travel — Remux playback and hotspot"
     case "$MENU_CHOICE" in
       0) title; "$SCRIPT_DIR/mode.sh" home || true; pause ;;
       1) title; "$SCRIPT_DIR/mode.sh" prepare || true; pause ;;
       2) title; "$SCRIPT_DIR/mode.sh" travel || true; pause ;;
-      3) title; configure_jellyfin_api; pause ;;
       -1) return ;;
     esac
   done
@@ -359,12 +312,12 @@ start_stack() {
   require_docker && require_config || return
   current_mode="$(mode_state)"
   ./prepare.sh
-  "$SCRIPT_DIR/hardware-transcoding.sh" configure
+  "$SCRIPT_DIR/gpu-passthrough.sh" configure
+  remove_legacy_jellyfin
   case "$current_mode" in
     home|prepare|travel) "$SCRIPT_DIR/mode.sh" "$current_mode" ;;
     *)
       docker compose up -d
-      "$SCRIPT_DIR/hardware-transcoding.sh" apply
       ;;
   esac
 }
@@ -372,7 +325,8 @@ start_stack() {
 restart_running_services() {
   local current_mode running_services service_name
   require_docker && require_config || return
-  "$SCRIPT_DIR/hardware-transcoding.sh" configure
+  "$SCRIPT_DIR/gpu-passthrough.sh" configure
+  remove_legacy_jellyfin
   current_mode="$(mode_state)"
   running_services=()
   while IFS= read -r service_name; do
@@ -516,7 +470,7 @@ main_menu() {
     title
     printf '  Stack:   %s\n' "$(stack_state)"
     printf '  Mode:    %s\n' "$(mode_state)"
-    printf '  H/W:     %s\n' "$(hardware_state)"
+    printf '  GPU:     %s\n' "$(gpu_state)"
     printf '  Hotspot: %s\n\n' "$(hotspot_state)"
     arrow_menu \
       "First setup / reconfigure" \
@@ -536,7 +490,8 @@ main_menu() {
       5) network_menu ;;
       6)
         title
-        printf '  Jellyfin  http://jellyfin.planelab\n'
+        printf '  Remux     http://jellyfin.planelab\n'
+        printf '  Remux alt http://remux.planelab\n'
         printf '  Seerr     http://seerr.planelab\n'
         printf '  Youtarr   http://youtarr.planelab\n'
         printf '  Sonarr    http://sonarr.planelab\n'
@@ -565,7 +520,7 @@ case "${1:-tui}" in
   restore) shift; ./restore.sh "$@" ;;
   network) shift; ./hotspot.sh "$@" ;;
   mode) shift; ./mode.sh "$@" ;;
-  hardware) shift; ./hardware-transcoding.sh "$@" ;;
+  gpu) shift; ./gpu-passthrough.sh "$@" ;;
   help|-h|--help)
     cat <<'EOF'
 Usage: ./planelab [command]
@@ -578,7 +533,7 @@ Commands:
   restore [--replace] <backup-directory>
   network <hotspot-command>
   mode <home|prepare|travel|status>
-  hardware <configure|apply|status>
+  gpu <configure|status>
 EOF
     ;;
   *)

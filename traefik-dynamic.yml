@@ -3,7 +3,11 @@ http:
     jellyfin:
       rule: Host(`jellyfin.planelab`)
       entryPoints: [web]
-      service: jellyfin
+      service: remux
+    remux:
+      rule: Host(`remux.planelab`)
+      entryPoints: [web]
+      service: remux
     seerr:
       rule: Host(`seerr.planelab`)
       entryPoints: [web]
@@ -34,10 +38,10 @@ http:
       service: youtarr
 
   services:
-    jellyfin:
+    remux:
       loadBalancer:
         servers:
-          - url: http://jellyfin:8096
+          - url: http://remux:3000
     seerr:
       loadBalancer:
         servers:
